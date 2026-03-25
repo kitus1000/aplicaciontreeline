@@ -85,7 +85,8 @@ export default function EvidenceGalleryPage() {
           if (!response.ok) throw new Error('Network response was not ok')
           const blob = await response.blob()
           const folderName = `${ev.empleado.nombre}_${ev.empleado.apellido_paterno}`.replace(/[^a-zA-Z0-9]/g, '_')
-          const fileName = `${ev.activity_description || 'Evidencia'}_${format(new Date(ev.created_at || ev.date), 'HH-mm-ss')}.jpg`.replace(/[^a-zA-Z0-9_.-]/g, '_')
+          const uniqueId = String(ev.id).substring(0, 6)
+          const fileName = `${ev.activity_description || 'Evidencia'}_${format(new Date(ev.created_at || ev.date), 'HH-mm-ss')}_${uniqueId}.jpg`.replace(/[^a-zA-Z0-9_.-]/g, '_')
           zip.folder(folderName)?.file(fileName, blob)
           hasFiles = true
         } catch (err) {
@@ -294,7 +295,7 @@ export default function EvidenceGalleryPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {employeesList.map(item => (
+              {employeesList.map((item: any) => (
                 <button
                   key={item.empleado.id_empleado}
                   onClick={() => setSelectedEmployeeId(item.empleado.id_empleado)}
