@@ -14,19 +14,27 @@ import {
   RefreshCw,
   Image as ImageIcon,
   Clock,
-  FolderOpen
+  FolderOpen,
+  Download,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { format } from 'date-fns'
+import JSZip from 'jszip'
 
 export default function EvidenceGalleryPage() {
   const { t } = useI18n()
   const [loading, setLoading] = useState(true)
   const [evidencias, setEvidencias] = useState<any[]>([])
   
-  // By default filter by today
-  const [filterDate, setFilterDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  // Date range filter
+  const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
+  
+  const [isExporting, setIsExporting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     fetchEvidencias()
@@ -57,7 +65,99 @@ export default function EvidenceGalleryPage() {
     }
   }
 
-  const dateFiltered = evidencias.filter(ev => ev.date === filterDate)
+  const dateFiltered = evidencias.filter(ev => ev.date >= startDate && ev.date <= endDate)
+
+  const handleExportZip = async () => {
+    if (dateFiltered.length === 0) {
+      alert('No hay imágenes para exportar en el rango de fechas seleccionado.')
+      return
+    }
+    
+    try {
+      setIsExporting(true)
+      const zip = new JSZip()
+      let hasFiles = false
+      
+      for (const ev of dateFiltered) {
+        if (!ev.storage_url) continue
+        try {
+          const response = await fetch(ev.storage_url)
+          if (!response.ok) throw new Error('Network response was not ok')
+          const blob = await response.blob()
+          const folderName = `${ev.empleado.nombre}_${ev.empleado.apellido_paterno}`.replace(/[^a-zA-Z0-9]/g, '_')
+          const fileName = `${ev.activity_description || 'Evidencia'}_${format(new Date(ev.created_at || ev.date), 'HH-mm-ss')}.jpg`.replace(/[^a-zA-Z0-9_.-]/g, '_')
+          zip.folder(folderName)?.file(fileName, blob)
+          hasFiles = true
+        } catch (err) {
+          console.error('Error fetching image for zip:', ev.storage_url, err)
+        }
+      }
+      
+      if (!hasFiles) {
+        alert('No se pudieron descargar las imágenes.')
+        return
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(content)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `Evidencias_${startDate}_al_${endDate}.zip`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Error creating zip:', err)
+      alert('Ocurrió un error al generar el ZIP.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleDeleteBulk = async () => {
+    if (dateFiltered.length === 0) {
+      alert('No hay imágenes para borrar en el rango seleccionado.')
+      return
+    }
+
+    const confirmDelete = window.confirm(`⚠️ ADVERTENCIA: Estás a punto de borrar permanentemente ${dateFiltered.length} imágenes del sistema.\n\nEsta acción NO se puede deshacer. ¿Deseas continuar?`)
+    if (!confirmDelete) return
+
+    try {
+      setIsDeleting(true)
+      const pathsToDelete: string[] = []
+      const idsToDelete: string[] = []
+
+      dateFiltered.forEach(ev => {
+        if (ev.storage_url) {
+          const urlParts = ev.storage_url.split('/worktrack-evidences/')
+          if (urlParts.length > 1) {
+            pathsToDelete.push(urlParts[1])
+          }
+        }
+        idsToDelete.push(ev.id)
+      })
+
+      if (pathsToDelete.length > 0) {
+        const { error: storageError } = await supabase.storage.from('worktrack-evidences').remove(pathsToDelete)
+        if (storageError) console.error('Error deleting from storage:', storageError)
+      }
+
+      if (idsToDelete.length > 0) {
+        const { error: dbError } = await supabase.from('workday_activities').delete().in('id', idsToDelete)
+        if (dbError) throw dbError
+      }
+
+      alert('Las imágenes se han borrado exitosamente.')
+      fetchEvidencias()
+    } catch (err) {
+      console.error('Error during bulk delete:', err)
+      alert('Ocurrió un error al borrar las imágenes.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   // Group by Employee
   const groupedByEmployee = dateFiltered.reduce((acc, ev) => {
@@ -123,15 +223,52 @@ export default function EvidenceGalleryPage() {
 
         {/* Level 0: Filters (Only visible when no employee is selected) */}
         {!activeEmployeeData && (
-          <div className="flex flex-col md:flex-row gap-6">
-            <div className="relative group w-full md:w-96">
-              <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5 group-focus-within:text-indigo-400 transition-colors" />
-              <input 
-                type="date"
-                value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
-                className="w-full h-16 glass-dark border border-white/5 rounded-[1.25rem] pl-14 pr-6 text-sm font-bold text-white outline-none focus:border-indigo-500/50 transition-all appearance-none"
-              />
+          <div className="flex flex-col xl:flex-row gap-6 items-end">
+            <div className="flex-[2] grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+              <div className="relative group">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Fecha Inicio</label>
+                <div className="relative">
+                  <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5 group-focus-within:text-indigo-400 transition-colors pointer-events-none" />
+                  <input 
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full h-14 glass-dark border border-white/5 rounded-2xl pl-14 pr-6 text-sm font-bold text-white outline-none focus:border-indigo-500/50 transition-all appearance-none"
+                  />
+                </div>
+              </div>
+              <div className="relative group">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Fecha Fin</label>
+                <div className="relative">
+                  <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5 group-focus-within:text-indigo-400 transition-colors pointer-events-none" />
+                  <input 
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full h-14 glass-dark border border-white/5 rounded-2xl pl-14 pr-6 text-sm font-bold text-white outline-none focus:border-indigo-500/50 transition-all appearance-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto mt-4 xl:mt-0 opacity-100 flex-1 justify-end">
+              <button
+                onClick={handleExportZip}
+                disabled={isExporting || dateFiltered.length === 0}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 h-14 px-6 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/30 rounded-2xl transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {isExporting ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download className="w-5 h-5" />}
+                <span className="text-[10px] font-black uppercase tracking-widest">Exportar ZIP</span>
+              </button>
+              
+              <button
+                onClick={handleDeleteBulk}
+                disabled={isDeleting || dateFiltered.length === 0}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 h-14 px-6 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-2xl transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {isDeleting ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Trash2 className="w-5 h-5" />}
+                <span className="text-[10px] font-black uppercase tracking-widest">Borrar Filtro</span>
+              </button>
             </div>
           </div>
         )}
