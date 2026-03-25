@@ -292,8 +292,8 @@ const translations: Record<Language, any> = {
     salida: 'Salida General',
     entrada_final: 'Entrada Jornada',
     salida_final: 'Salida Final',
-    comida_salida: 'Inicia Comida',
-    comida_regreso: 'Fin Comida',
+    comida_salida: 'Salida a comer',
+    comida_regreso: 'Regreso de comer',
     comida_in: 'Regreso de comer',
     comida_out: 'Salida a comer',
 

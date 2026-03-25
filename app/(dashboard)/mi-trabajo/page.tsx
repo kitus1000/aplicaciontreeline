@@ -506,22 +506,24 @@ export default function MyWorkTodayPage() {
                                     {new Date(ev.event_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })}
                                   </p>
                                   
-                                  {/* Hover Actions */}
-                                  <div className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover/box:opacity-100 transition-opacity">
+                                  {/* Actions */}
+                                  <div className="absolute top-1 right-1 flex items-center gap-1 transition-opacity">
                                     <button 
                                       onClick={() => {
                                         setEditingEventId(ev.id)
                                         setEditTimeValue(new Date(ev.event_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }))
                                       }}
-                                      className="p-1 bg-white/5 hover:bg-white/10 rounded-md text-slate-400 hover:text-white transition-colors border border-white/5"
+                                      className="p-1 px-2 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded-lg transition-all border border-indigo-500/20 shadow-sm"
+                                      title="Editar hora"
                                     >
-                                      <Edit2 className="w-2.5 h-2.5" />
+                                      <Edit2 className="w-3 h-3" />
                                     </button>
                                     <button 
                                       onClick={() => handleDeleteEvent(ev.id)}
-                                      className="p-1 bg-red-500/5 hover:bg-red-500/20 rounded-md text-red-400/60 hover:text-red-400 transition-colors border border-white/5"
+                                      className="p-1 px-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-all border border-red-500/20 shadow-sm"
+                                      title="Eliminar este registro"
                                     >
-                                      <Trash2 className="w-2.5 h-2.5" />
+                                      <Trash2 className="w-3 h-3" />
                                     </button>
                                   </div>
                                 </>
