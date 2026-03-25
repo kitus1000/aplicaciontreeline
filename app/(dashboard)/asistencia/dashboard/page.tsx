@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/utils/supabase/client'
 import { Activity, Clock, LogIn, LogOut, CheckCircle, RefreshCw, AlertCircle, Calendar, Trash2, Edit, Save, X, User } from 'lucide-react'
 import Link from 'next/link'
+import { useI18n } from '@/lib/i18n'
 
 export default function AsistenciaDashboard() {
+    const { t } = useI18n()
     const [checadas, setChecadas] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
@@ -78,7 +80,7 @@ export default function AsistenciaDashboard() {
     }
 
     const formatHora = (isoStr: string) => {
-        return new Date(isoStr).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        return new Date(isoStr).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
     }
 
     return (
@@ -86,8 +88,8 @@ export default function AsistenciaDashboard() {
             {/* Cabecera / Navegación */}
             <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-zinc-200">
                 <div>
-                    <h1 className="text-2xl font-bold text-zinc-900">Monitor de Asistencia Visual</h1>
-                    <p className="text-sm text-zinc-500">Visualiza y gestiona los registros de asistencia.</p>
+                    <h1 className="text-2xl font-bold text-zinc-900">{t('attendance_monitor_title')}</h1>
+                    <p className="text-sm text-zinc-500">{t('attendance_monitor_subtitle')}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 mt-4 md:mt-0">
                     <div className="flex items-center gap-2 bg-zinc-100 px-3 py-2 rounded-lg border border-zinc-200 shadow-sm">
@@ -100,10 +102,10 @@ export default function AsistenciaDashboard() {
                         />
                     </div>
                     <Link href="/asistencia/manual" className="text-sm font-semibold text-zinc-600 bg-white px-4 py-2 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors shadow-sm">
-                        Registros Manuales
+                        {t('manual_records')}
                     </Link>
                     <Link href="/asistencia/permisos" className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-4 py-2 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors shadow-sm">
-                        Generar Permisos
+                        {t('generate_permits')}
                     </Link>
                     <button
                         onClick={fetchChecadas}
@@ -121,7 +123,7 @@ export default function AsistenciaDashboard() {
                         <Activity className="w-6 h-6 text-blue-600" />
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-zinc-500 uppercase">Movimientos Hoy</p>
+                        <p className="text-sm font-medium text-zinc-500 uppercase">{t('today_movements')}</p>
                         <p className="text-2xl font-bold text-zinc-900">{stats.totalChecadas}</p>
                     </div>
                 </div>
@@ -130,7 +132,7 @@ export default function AsistenciaDashboard() {
                         <CheckCircle className="w-6 h-6 text-green-600" />
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-zinc-500 uppercase">Puntuales</p>
+                        <p className="text-sm font-medium text-zinc-500 uppercase">{t('on_time')}</p>
                         <p className="text-2xl font-bold text-zinc-900">{stats.puntuales}</p>
                     </div>
                 </div>
@@ -139,7 +141,7 @@ export default function AsistenciaDashboard() {
                         <Clock className="w-6 h-6 text-amber-600" />
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-zinc-500 uppercase">Retardos</p>
+                        <p className="text-sm font-medium text-zinc-500 uppercase">{t('late')}</p>
                         <p className="text-2xl font-bold text-zinc-900">{stats.retardos}</p>
                     </div>
                 </div>
@@ -148,7 +150,7 @@ export default function AsistenciaDashboard() {
                         <AlertCircle className="w-6 h-6 text-red-600" />
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-zinc-500 uppercase">Faltas</p>
+                        <p className="text-sm font-medium text-zinc-500 uppercase">{t('absent')}</p>
                         <p className="text-2xl font-bold text-zinc-900">{stats.faltas}</p>
                     </div>
                 </div>
@@ -159,7 +161,7 @@ export default function AsistenciaDashboard() {
                 <div className="p-4 border-b border-zinc-100 bg-zinc-50 rounded-t-xl flex justify-between items-center">
                     <h2 className="font-semibold text-zinc-800 flex items-center gap-2">
                         <Activity className="w-4 h-4 text-zinc-400" />
-                        Registros {selectedDate === new Date().toISOString().split('T')[0] ? 'de Hoy' : `del ${selectedDate}`}
+                        {selectedDate === new Date().toISOString().split('T')[0] ? t('records_today') : `${t('records_of')} ${selectedDate}`}
                     </h2>
                 </div>
 
@@ -167,22 +169,22 @@ export default function AsistenciaDashboard() {
                     <table className="w-full whitespace-nowrap">
                         <thead>
                             <tr className="bg-white border-b border-zinc-100 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                                <th className="px-6 py-4 text-left">Hora</th>
-                                <th className="px-6 py-4 text-left">Empleado</th>
-                                <th className="px-6 py-4 text-left">Trámite / Tipo</th>
-                                <th className="px-6 py-4 text-left">Puntualidad</th>
-                                <th className="px-6 py-4 text-left">Origen</th>
-                                <th className="px-6 py-4 text-right">Acciones</th>
+                                <th className="px-6 py-4 text-left">{t('th_time')}</th>
+                                <th className="px-6 py-4 text-left">{t('th_employee')}</th>
+                                <th className="px-6 py-4 text-left">{t('th_type')}</th>
+                                <th className="px-6 py-4 text-left">{t('th_punctuality')}</th>
+                                <th className="px-6 py-4 text-left">{t('th_origin')}</th>
+                                <th className="px-6 py-4 text-right">{t('actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-50">
-                            {loading && <tr><td colSpan={5} className="p-8 text-center text-sm text-zinc-400">Cargando datos en vivo...</td></tr>}
+                            {loading && <tr><td colSpan={5} className="p-8 text-center text-sm text-zinc-400">{t('loading_live_data')}</td></tr>}
                             {!loading && checadas.length === 0 ? (
                                 <tr>
                                     <td colSpan={5} className="p-10 text-center text-zinc-400">
                                         <div className="flex flex-col items-center">
                                             <AlertCircle className="w-10 h-10 text-zinc-300 mb-3" />
-                                            <p className="font-medium text-sm">No hay checadas registradas el día de hoy.</p>
+                                            <p className="font-medium text-sm">{t('no_records_today')}</p>
                                         </div>
                                     </td>
                                 </tr>

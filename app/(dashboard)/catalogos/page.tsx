@@ -6,16 +6,24 @@ import { Plus, Trash2, Tag, FileType, Clock, Edit, X, Briefcase, Building2, Truc
 import Link from 'next/link'
 import { downloadTemplate, parseExcelFile, exportToExcel } from '@/utils/excelUtils'
 import { useRef } from 'react'
+import { useI18n } from '@/lib/i18n'
 
-const tabs = [
-    { id: 'turnos', label: 'Turnos', icon: Clock, color: 'amber', href: '/catalogos/turnos' },
-    { id: 'incidencias', label: 'Incidencias', icon: AlertCircle, color: 'amber' },
-    { id: 'solicitudes', label: 'Solicitudes', icon: FileType, color: 'blue' },
-    { id: 'roles', label: 'Roles', icon: Briefcase, color: 'green' },
-    { id: 'departamentos', label: 'Departamentos', icon: Building2, color: 'purple' },
-    { id: 'unidades', label: 'Unidades', icon: Truck, color: 'orange' },
-    { id: 'bajas', label: 'Causas de Baja', icon: ArrowDownLeft, color: 'red' },
-    { id: 'tipos_checada', label: 'Tolerancias', icon: TimerOff, color: 'indigo' },
+const TAB_ICONS: Record<string, any> = {
+    turnos: Clock,
+    incidencias: AlertCircle,
+    solicitudes: FileType,
+    roles: Briefcase,
+    departamentos: Building2,
+    bajas: ArrowDownLeft,
+}
+
+const getTabs = (t: any) => [
+    { id: 'turnos', label: t('cat_shifts'), icon: TAB_ICONS.turnos, color: 'amber', href: '/catalogos/turnos' },
+    { id: 'incidencias', label: t('cat_incidents'), icon: TAB_ICONS.incidencias, color: 'amber' },
+    { id: 'solicitudes', label: t('cat_requests'), icon: TAB_ICONS.solicitudes, color: 'blue' },
+    { id: 'roles', label: t('cat_roles'), icon: TAB_ICONS.roles, color: 'green' },
+    { id: 'departamentos', label: t('cat_departments'), icon: TAB_ICONS.departamentos, color: 'purple' },
+    { id: 'bajas', label: t('cat_terminations'), icon: TAB_ICONS.bajas, color: 'red' },
 ]
 
 const colorMap: Record<string, { bg: string, text: string, border: string, light: string, badge: string }> = {
@@ -29,9 +37,11 @@ const colorMap: Record<string, { bg: string, text: string, border: string, light
 }
 
 export default function CatalogosPage() {
+    const { t } = useI18n()
+    const tabs = getTabs(t)
     const [activeTab, setActiveTab] = useState('incidencias')
     const [selectedDeptForPuestos, setSelectedDeptForPuestos] = useState<any>(null)
-
+ 
     const activeTabInfo = tabs.find(t => t.id === activeTab)!
     const colors = colorMap[activeTabInfo.color]
 
@@ -43,9 +53,9 @@ export default function CatalogosPage() {
                 <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
                 <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <p className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-1">Sistema de RRHH</p>
-                        <h1 className="text-2xl font-bold text-white">Administración de Catálogos</h1>
-                        <p className="text-zinc-400 text-sm mt-1">Gestiona las opciones disponibles en el sistema de forma centralizada.</p>
+                        <p className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-1">Worktrack WorkForce</p>
+                        <h1 className="text-2xl font-bold text-white">{t('catalogs_title')}</h1>
+                        <p className="text-zinc-400 text-sm mt-1">{t('catalogs_subtitle')}</p>
                     </div>
                 </div>
             </div>
@@ -105,16 +115,16 @@ export default function CatalogosPage() {
                             table="cat_departamentos"
                             idField="id_departamento"
                             nameField="departamento"
-                            title="Departamentos"
+                            title={t('cat_departments')}
                             color="purple"
                             renderActions={(item: any) => (
                                 <button
                                     onClick={() => setSelectedDeptForPuestos(item)}
                                     className="p-2 rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-2 group/btn border border-transparent hover:border-indigo-100 shadow-sm hover:shadow-md transition-all active:scale-95"
-                                    title="Gestionar Puestos"
+                                    title={t('cat_departments_view_positions')}
                                 >
                                     <Tag className="w-4 h-4" />
-                                    <span className="text-[10px] font-black uppercase tracking-wider">Ver Puestos</span>
+                                    <span className="text-[10px] font-black uppercase tracking-wider">{t('view')} {t('cat_roles')}</span>
                                 </button>
                             )}
                         />
@@ -128,9 +138,7 @@ export default function CatalogosPage() {
                         )}
                     </>
                 )}
-                {activeTab === 'unidades' && <CatalogManager table="cat_unidades_trabajo" idField="id_unidad" nameField="unidad_trabajo" title="Unidades de Trabajo" color="orange" />}
-                {activeTab === 'bajas' && <CatalogManager table="cat_causas_baja" idField="id_causa_baja" nameField="causa" title="Causas de Baja" color="red" />}
-                {activeTab === 'tipos_checada' && <TiposChecadaManager />}
+                { activeTab === 'bajas' && <CatalogManager table="cat_causas_baja" idField="id_causa_baja" nameField="causa" title={t('cat_terminations')} color="red" /> }
             </div>
         </div>
     )
@@ -138,6 +146,7 @@ export default function CatalogosPage() {
 
 // ─── CatalogManager ─────────────────────────────────────────────────────────
 function CatalogManager({ table, idField, nameField, title, color, renderActions }: any) {
+    const { t, language } = useI18n()
     const [items, setItems] = useState<any[]>([])
     const [newItem, setNewItem] = useState('')
     const [loading, setLoading] = useState(true)
@@ -147,9 +156,9 @@ function CatalogManager({ table, idField, nameField, title, color, renderActions
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     const c = colorMap[color] ?? colorMap['amber']
-    // Safe lookup for tabInfo and Icon
-    const tabInfo = tabs.find(t => t.id === table.replace('cat_tipos_', '').replace('cat_', ''))
-    const Icon = tabInfo?.icon ?? Tag
+    // Safe lookup for Icon
+    const tabKey = table.replace('cat_tipos_', '').replace('cat_', '')
+    const Icon = TAB_ICONS[tabKey] ?? Tag
 
     useEffect(() => { fetchItems() }, [table])
 
@@ -244,7 +253,7 @@ function CatalogManager({ table, idField, nameField, title, color, renderActions
                     </div>
                     <div>
                         <h2 className="font-bold text-zinc-900 text-base">{title}</h2>
-                        <p className="text-xs text-zinc-500">{items.length} elemento{items.length !== 1 ? 's' : ''} registrado{items.length !== 1 ? 's' : ''}</p>
+                        <p className="text-xs text-zinc-500">{items.length} {t('items_count')}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -285,11 +294,11 @@ function CatalogManager({ table, idField, nameField, title, color, renderActions
 
             {/* Add Form */}
             <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Agregar nuevo</label>
+                <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">{t('add')} {language === 'es' ? 'nuevo' : 'new'}</label>
                 <div className="flex gap-2">
                     <input
                         type="text"
-                        placeholder={`Nombre del ${title.toLowerCase()}...`}
+                        placeholder={`${t('name')}...`}
                         className={`flex-1 rounded-xl border border-zinc-200 text-sm text-black bg-white px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-offset-1 transition-shadow`}
                         style={{ ['--tw-ring-color' as any]: c.bg.replace('bg-', '') }}
                         value={newItem}
@@ -302,7 +311,7 @@ function CatalogManager({ table, idField, nameField, title, color, renderActions
                         className={`${c.bg} text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 shadow-sm`}
                     >
                         <Plus className="w-4 h-4" />
-                        Agregar
+                        {t('add')}
                     </button>
                 </div>
             </div>
@@ -310,9 +319,9 @@ function CatalogManager({ table, idField, nameField, title, color, renderActions
             {/* List */}
             <div className="divide-y divide-zinc-50">
                 {loading ? (
-                    <div className="py-12 text-center text-sm text-zinc-400 animate-pulse">Cargando...</div>
+                    <div className="py-12 text-center text-sm text-zinc-400 animate-pulse">{t('loading')}...</div>
                 ) : items.length === 0 ? (
-                    <div className="py-12 text-center text-sm text-zinc-400 italic">No hay elementos. Agrega el primero arriba.</div>
+                    <div className="py-12 text-center text-sm text-zinc-400 italic">{language === 'es' ? 'No hay elementos.' : 'No items found.'}</div>
                 ) : (
                     items.map((item) => (
                         <div key={item[idField]} className="group flex items-center px-6 py-3 hover:bg-zinc-50/80 transition-colors">
@@ -330,7 +339,7 @@ function CatalogManager({ table, idField, nameField, title, color, renderActions
                                         }}
                                     />
                                     <button onClick={() => handleSaveEdit(item[idField])} className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 text-white rounded-lg text-xs font-bold hover:bg-zinc-700 transition-colors">
-                                        <Check className="w-3.5 h-3.5" /> Guardar
+                                        <Check className="w-3.5 h-3.5" /> {t('save')}
                                     </button>
                                     <button onClick={() => setEditItemId(null)} className="p-2 text-zinc-400 hover:text-zinc-700 rounded-lg hover:bg-zinc-100 transition-colors">
                                         <X className="w-4 h-4" />
@@ -369,6 +378,7 @@ function CatalogManager({ table, idField, nameField, title, color, renderActions
 
 // ─── PuestosSubManager ──────────────────────────────────────────────────────
 function PuestosSubManager({ dept, onClose }: { dept: any, onClose: () => void }) {
+    const { t, language } = useI18n()
     const [puestos, setPuestos] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [newItem, setNewItem] = useState('')
@@ -504,6 +514,7 @@ function PuestosSubManager({ dept, onClose }: { dept: any, onClose: () => void }
 
 // ─── RolesManager ────────────────────────────────────────────────────────────
 function RolesManager() {
+    const { t, language } = useI18n()
     const [roles, setRoles] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [formData, setFormData] = useState({ tipo_rol: '', dias_trabajo: 20, dias_descanso: 10, descripcion: '' })
@@ -550,11 +561,11 @@ function RolesManager() {
                         <Briefcase className="w-4 h-4 text-white" />
                     </div>
                     <div>
-                        <h2 className="font-bold text-zinc-900 text-base">Roles de Trabajo</h2>
-                        <p className="text-xs text-zinc-500">Esquemas de días trabajados y días de descanso</p>
+                        <h2 className="font-bold text-zinc-900 text-base">{t('cat_roles')}</h2>
+                        <p className="text-xs text-zinc-500">{language === 'es' ? 'Esquemas de días trabajados y días de descanso' : 'Workday schemes and rest days'}</p>
                     </div>
                 </div>
-                <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">Activos: {roles.length}</span>
+                <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">{t('status_active')}: {roles.length}</span>
             </div>
 
             {/* Add Form */}
@@ -662,75 +673,3 @@ function RolesManager() {
     )
 }
 
-// ─── TiposChecadaManager ─────────────────────────────────────────────────────
-function TiposChecadaManager() {
-    const [tols, setTols] = useState<any[]>([])
-    const [loading, setLoading] = useState(true)
-
-    useEffect(() => { fetchTols() }, [])
-
-    async function fetchTols() {
-        const { data } = await supabase.from('cat_tipos_checada')
-            .select('tipo, label, tolerancia_retorno_min')
-            .in('tipo', ['PERMISO_PERSONAL', 'SALIDA_OPERACIONES'])
-            .order('label')
-        setTols(data || [])
-        setLoading(false)
-    }
-
-    async function handleUpdate(tipo: string, nval: number) {
-        if (nval < 0) return alert('La tolerancia no puede ser negativa')
-        const { error } = await supabase.from('cat_tipos_checada').update({ tolerancia_retorno_min: nval }).eq('tipo', tipo)
-        if (error) alert('Error: ' + error.message)
-        else { alert('Tolerancia actualizada correctamente'); fetchTols() }
-    }
-
-    return (
-        <div className="bg-white rounded-2xl shadow-sm border border-zinc-100 overflow-hidden animate-in fade-in duration-300">
-            <div className="px-6 py-4 flex items-center justify-between border-b border-zinc-100 bg-indigo-50">
-                <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-indigo-500 rounded-xl shadow-sm">
-                        <TimerOff className="w-4 h-4 text-white" />
-                    </div>
-                    <div>
-                        <h2 className="font-bold text-zinc-900 text-base">Tolerancia de Regresos</h2>
-                        <p className="text-xs text-zinc-500">Minutos de gracia antes de marcar Retardo al regresar de un permiso</p>
-                    </div>
-                </div>
-            </div>
-
-            {loading ? (
-                <div className="py-12 text-center text-sm text-zinc-400 animate-pulse">Cargando...</div>
-            ) : (
-                <div className="p-6 space-y-4">
-                    {tols.length === 0 && (
-                        <p className="text-xs text-amber-600 italic">⚠️ No se encontraron los tipos de Permisos. Asegúrese de haber corrido los scripts SQL.</p>
-                    )}
-                    {tols.map((t) => (
-                        <div key={t.tipo} className="group flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-gradient-to-r from-indigo-50/60 to-white rounded-xl border border-indigo-100 hover:border-indigo-300 hover:shadow-sm transition-all">
-                            <div>
-                                <h3 className="font-bold text-zinc-800">{t.label}</h3>
-                                <p className="text-xs text-zinc-500 mt-0.5">Límite de cortesía tras vencer la vigencia autorizada.</p>
-                            </div>
-                            <div className="mt-4 sm:mt-0 flex items-center gap-3">
-                                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Tolerancia (min):</label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number"
-                                        className="w-24 text-sm border border-indigo-200 rounded-xl text-black text-center font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 px-3 py-2 bg-white bg-opacity-80"
-                                        defaultValue={t.tolerancia_retorno_min}
-                                        onBlur={(e) => {
-                                            const v = parseInt(e.target.value)
-                                            if (!isNaN(v) && v !== t.tolerancia_retorno_min) handleUpdate(t.tipo, v)
-                                        }}
-                                    />
-                                    <span className="text-xs font-medium text-indigo-500 bg-indigo-50 px-2 py-1.5 rounded-lg border border-indigo-100">min</span>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    )
-}

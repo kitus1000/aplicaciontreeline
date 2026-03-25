@@ -1,450 +1,263 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/utils/supabase/client'
-import Link from 'next/link'
-import {
-  Users,
-  AlertCircle,
-  CalendarDays,
-  FileCheck,
-  Building,
-  Activity,
-  Clock,
-  ArrowUpRight
-} from 'lucide-react'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend
-} from 'recharts'
+import { Users, TrendingUp, Clock, ShieldAlert, Zap, HardHat, CheckCircle2, LineChart, Activity, AlertCircle, Camera } from 'lucide-react'
+import { cn } from '@/utils/cn'
 
-export default function Dashboard() {
-  // --- STATE ---
-  const [loading, setLoading] = useState(true)
-  const [company, setCompany] = useState<any>({ name: 'Mi Empresa', logo: null })
-  const [currentDate, setCurrentDate] = useState<string>('')
+export default function KPIDashboardPage() {
+  const router = useRouter()
+  const [userName, setUserName] = useState('')
+  const [stats, setStats] = useState({
+    empleados: 0,
+    pendientes: 0,
+    proyectos: 0,
+    active: 0
+  })
 
-  // KPI Stats
-  const [stats, setStats] = useState([
-    { name: 'Empleados Activos', value: '0', icon: Users, color: 'text-amber-500', bg: 'bg-zinc-900 border-amber-500/20', href: '/empleados', trend: '+2%' },
-    { name: 'Incidencias (Mes)', value: '0', icon: AlertCircle, color: 'text-red-500', bg: 'bg-zinc-900 border-zinc-800', href: '/empleados', trend: '-1' },
-    { name: 'Solicitudes Pendientes', value: '0', icon: FileCheck, color: 'text-blue-500', bg: 'bg-zinc-900 border-zinc-800', href: '/solicitudes', trend: 'Actual' },
-    { name: 'Departamentos', value: '0', icon: Building, color: 'text-emerald-500', bg: 'bg-zinc-900 border-zinc-800', href: '/catalogos', trend: 'Estable' },
-  ])
-
-  // Charts Data
-  const [requestsData, setRequestsData] = useState<any[]>([])
-  const [incidentsData, setIncidentsData] = useState<any[]>([])
-  const [recentActivity, setRecentActivity] = useState<any[]>([])
-  const [activeInsight, setActiveInsight] = useState<string | null>(null)
-  const [insightData, setInsightData] = useState<any>(null)
-
-  // --- COLORS ---
-  const COLORS = ['#f59e0b', '#3b82f6', '#ef4444', '#10b981', '#8b5cf6', '#ec4899']
-
-  // --- EFFECT: LOAD DATA ---
   useEffect(() => {
-    checkPermissions()
-    // 1. Initial Setup
-    const dateStr = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-    setCurrentDate(`${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}`)
-
-    fetchCompanyConfig()
     fetchDashboardData()
   }, [])
 
-  async function checkPermissions() {
+  async function fetchDashboardData() {
     const { data: { user } } = await supabase.auth.getUser()
+    
     if (user) {
       const { data: profile } = await supabase
         .from('perfiles')
-        .select('rol')
+        .select('nombre_completo')
         .eq('id', user.id)
         .single()
-
-      if (profile && profile.rol === 'Jefe') {
-        window.location.href = '/autorizaciones'
-      }
-    }
-  }
-
-  async function fetchCompanyConfig() {
-    const { data } = await supabase
-      .from('configuracion_empresa')
-      .select('*')
-      .limit(1)
-      .single()
-
-    if (data) {
-      setCompany({ name: data.nombre_empresa || 'Mi Empresa', logo: data.logo_base64 })
+      
+      const email = user.email || ''
+      setUserName(profile?.nombre_completo?.split(' ')[0] || user.user_metadata?.nombre_completo?.split(' ')[0] || email.split('@')[0] || 'Administrator')
     } else {
-      // Fallback to localStorage if DB is empty or fails
-      const storedConfig = localStorage.getItem('rh_config_empresa')
-      if (storedConfig) {
-        const parsed = JSON.parse(storedConfig)
-        setCompany({ name: parsed.nombre_empresa || 'Mi Empresa', logo: parsed.logo_base64 })
-      }
+      setUserName('Administrator')
     }
+
+    const today = new Date().toISOString().split('T')[0]
+
+    // 1. Empleados totales
+    const { count: empCount } = await supabase
+        .from('empleados')
+        .select('*', { count: 'exact', head: true })
+
+    // 2. Fotos de evidencia hoy
+    const { count: photoCount } = await supabase
+        .from('workday_activities')
+        .select('*', { count: 'exact', head: true })
+        .eq('date', today)
+        .not('storage_url', 'is', null)
+
+    // 3. Checadas hoy (Personal activo)
+    const { data: activeData } = await supabase
+        .from('checadas')
+        .select('id_empleado_token', { count: 'exact' })
+        .eq('fecha', today)
+        .eq('tipo_checada', 'ENTRADA')
+
+    // 4. Solicitudes pendientes
+    const { count: pendingCount } = await supabase
+        .from('solicitudes')
+        .select('*', { count: 'exact', head: true })
+        .eq('estado', 'PENDIENTE')
+        
+    setStats({
+      empleados: empCount || 0,
+      pendientes: pendingCount || 0,
+      proyectos: photoCount || 0, // Usamos proyectos para mostrar fotos hoy interinamente
+      active: activeData?.length || 0
+    })
   }
 
-  async function fetchDashboardData() {
-    try {
-      // A. STATS COUNTS
-      const { count: empCount } = await supabase.from('empleados').select('*', { count: 'exact', head: true }).eq('estado_empleado', 'Activo')
-      const { count: incCount } = await supabase.from('empleado_incidencias').select('*', { count: 'exact', head: true }).eq('estado', 'Capturada')
-      const { count: solCount } = await supabase.from('solicitudes').select('*', { count: 'exact', head: true }).eq('estatus', 'En revisión')
-      const { count: depCount } = await supabase.from('cat_departamentos').select('*', { count: 'exact', head: true })
-
-      setStats([
-        { name: 'Empleados Activos', value: (empCount || 0).toString(), icon: Users, color: 'text-amber-500', bg: 'bg-zinc-900 border-amber-500/20', href: '/empleados', trend: 'Total' },
-        { name: 'Incidencias Activas', value: (incCount || 0).toString(), icon: AlertCircle, color: 'text-red-500', bg: 'bg-zinc-900 border-zinc-800', href: '/empleados', trend: 'Requieren Atención' },
-        { name: 'Solicitudes Pendientes', value: (solCount || 0).toString(), icon: FileCheck, color: 'text-blue-500', bg: 'bg-zinc-900 border-zinc-800', href: '/solicitudes', trend: 'En revisión' },
-        { name: 'Departamentos', value: (depCount || 0).toString(), icon: Building, color: 'text-emerald-500', bg: 'bg-zinc-900 border-zinc-800', href: '/catalogos', trend: 'Estructura' },
-      ])
-
-      // B. CHARTS: REQUESTS BY TYPE
-      const { data: solData } = await supabase
-        .from('solicitudes')
-        .select('id_tipo_solicitud, cat_tipos_solicitud(tipo_solicitud)')
-
-      if (solData) {
-        const group: any = {}
-        solData.forEach((s: any) => {
-          const type = s.cat_tipos_solicitud?.tipo_solicitud || 'Otro'
-          group[type] = (group[type] || 0) + 1
-        })
-        const chartData = Object.keys(group).map(key => ({ name: key, value: group[key] }))
-        setRequestsData(chartData)
-      }
-
-      // C. CHARTS: INCIDENTS BY TYPE
-      const { data: incData } = await supabase
-        .from('empleado_incidencias')
-        .select('id_tipo_incidencia, cat_tipos_incidencia(tipo_incidencia)')
-
-      if (incData) {
-        const group: any = {}
-        incData.forEach((i: any) => {
-          const type = i.cat_tipos_incidencia?.tipo_incidencia || 'Otro'
-          group[type] = (group[type] || 0) + 1
-        })
-        const chartData = Object.keys(group).map(key => ({ name: key, value: group[key] }))
-        setIncidentsData(chartData)
-      }
-
-      // D. RECENT ACTIVITY
-      const { data: recent } = await supabase
-        .from('solicitudes')
-        .select(`
-                    id_solicitud,
-                    folio,
-                    estatus,
-                    creado_el,
-                    cat_tipos_solicitud(tipo_solicitud),
-                    empleados(nombre, apellido_paterno)
-                `)
-        .order('creado_el', { ascending: false })
-        .limit(5)
-
-      setRecentActivity(recent || [])
-
-      // E. INSIGHT DATA: EMPLOYEES BY DEPT
-      const { data: adscData } = await supabase
-        .from('empleado_adscripciones')
-        .select('id_departamento, cat_departamentos(departamento)')
-        .filter('fecha_fin', 'is', null)
-
-      const deptGroup: any = {}
-      adscData?.forEach((a: any) => {
-        const d = a.cat_departamentos?.departamento || 'Sin Depto'
-        deptGroup[d] = (deptGroup[d] || 0) + 1
-      })
-
-      const solPendientes = solData?.filter((s: any) => s.estatus === 'En revisión').slice(0, 3)
-
-      setInsightData({
-        depts: Object.keys(deptGroup).map(k => ({ name: k, count: deptGroup[k] })),
-        pending: recent?.filter(r => r.estatus === 'En revisión').slice(0, 3) || []
-      })
-
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
+  const kpis = [
+    {
+      title: "Personal Registrado",
+      value: stats.empleados.toString(),
+      subtext: "Colaboradores en sistema",
+      icon: Users,
+      trend: "Total",
+      trendColor: "text-blue-400",
+      color: "from-blue-500 to-indigo-600",
+      glow: "bg-blue-500/20"
+    },
+    {
+      title: "Personal Activo Hoy",
+      value: (stats as any).active?.toString() || "0",
+      subtext: "Entradas registradas hoy",
+      icon: Activity,
+      trend: "En sitio",
+      trendColor: "text-emerald-400",
+      color: "from-emerald-500 to-teal-600",
+      glow: "bg-emerald-500/20"
+    },
+    {
+      title: "Evidencias Enviadas",
+      value: stats.proyectos.toString(),
+      subtext: "Fotos capturadas hoy",
+      icon: Camera,
+      trend: "Visual",
+      trendColor: "text-pink-400",
+      color: "from-pink-500 to-rose-600",
+      glow: "bg-pink-500/20"
+    },
+    {
+      title: "Solicitudes",
+      value: stats.pendientes.toString(),
+      subtext: "Pendientes de revisión",
+      icon: ShieldAlert,
+      trend: "Acción Requerida",
+      trendColor: "text-red-400",
+      color: "from-orange-500 to-red-600",
+      glow: "bg-red-500/20"
     }
-  }
+  ]
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
+    <div className="relative min-h-[calc(100vh-4rem)] p-8 overflow-hidden page-transition">
+      {/* Background Graphic */}
+      <div className="absolute inset-0 construction-grid opacity-20 pointer-events-none"></div>
+      
+      {/* HUD Radar Rings */}
+      <div className="absolute top-0 right-0 w-[800px] h-[800px] border border-white/5 rounded-full translate-x-1/3 -translate-y-1/3 animate-[spin_60s_linear_infinite] pointer-events-none"></div>
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] border border-white/[0.02] rounded-full translate-x-1/4 -translate-y-1/4 animate-[spin_40s_linear_infinite_reverse] pointer-events-none"></div>
 
-      {/* HEADER CORPORTATIVO */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-6 rounded-xl shadow-sm border border-zinc-200">
-        <div className="flex items-center space-x-4">
-          {company.logo ? (
-            <img src={company.logo} alt="Logo" className="h-16 w-16 object-contain" />
-          ) : (
-            <div className="h-16 w-16 bg-zinc-100 rounded-lg flex items-center justify-center">
-              <Building className="h-8 w-8 text-zinc-300" />
+      <div className="relative z-10 max-w-7xl mx-auto space-y-10">
+        
+        {/* Header Section */}
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-indigo-500/20 pb-8">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+               <span className="px-3 py-1 bg-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] rounded-full border border-indigo-500/30">Analytics Core</span>
+               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
             </div>
-          )}
-          <div>
-            <h1 className="text-2xl font-black text-zinc-900 uppercase tracking-tight">{company.name}</h1>
-            <p className="text-sm text-zinc-500 font-medium tracking-widest text-amber-600 uppercase">El Expediente | Gestión Institucional</p>
+            <h1 className="text-5xl font-black text-white tracking-tighter italic uppercase leading-tight">
+              Dashboard <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-blue-500">KPIs</span>
+            </h1>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em] max-w-lg leading-relaxed">
+              Métricas Operativas y de Rendimiento <br />
+              <span className="text-indigo-400/50">Datos en Tiempo Real</span>
+            </p>
           </div>
-        </div>
-        <div className="mt-4 md:mt-0 text-right">
-          <p className="text-2xl font-light text-zinc-800">{currentDate}</p>
-          <div className="flex items-center justify-end text-sm text-zinc-400 mt-1">
-            <Clock className="w-4 h-4 mr-1" />
-            <span>Panel de Control en Tiempo Real</span>
+          
+          <div className="hidden lg:flex items-center gap-8 glass-dark px-8 py-4 rounded-3xl border border-white/5">
+            <Activity className="w-8 h-8 text-indigo-400 animate-pulse" />
+            <div>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Status General</p>
+              <p className="text-xl font-black text-emerald-400 uppercase tracking-widest">Óptimo</p>
+            </div>
           </div>
-        </div>
-      </div>
+        </header>
 
-      {/* KPI GRID */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 relative">
-        {stats.map((item) => (
-          <div key={item.name} className="relative group">
-            <Link
-              href={item.href || '#'}
-              className={`block overflow-hidden rounded-xl border p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 bg-white border-zinc-200`}
-              onMouseEnter={() => setActiveInsight(item.name)}
-              onMouseLeave={() => setActiveInsight(null)}
+        {/* Top KPIs Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {kpis.map((kpi, idx) => (
+            <div 
+              key={idx}
+              className="relative glass-dark p-6 rounded-[2rem] border border-white/5 overflow-hidden group hover:border-indigo-500/30 transition-all duration-500 animate-in fade-in slide-in-from-bottom-8"
+              style={{ animationDelay: `${idx * 100}ms` }}
             >
-              <div className="flex items-center justify-between z-10 relative">
-                <div>
-                  <p className="truncate text-xs font-bold text-zinc-500 uppercase tracking-wider">{item.name}</p>
-                  <p className="text-4xl font-black text-zinc-900 mt-2 tracking-tight">{item.value}</p>
+              {/* Backglow */}
+              <div className={cn("absolute -top-10 -right-10 w-32 h-32 rounded-full blur-[40px] opacity-30 group-hover:opacity-60 transition-opacity", kpi.glow)}></div>
+              
+              <div className="relative z-10 flex justify-between items-start mb-8">
+                <div className={cn(
+                  "w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br shadow-lg",
+                  kpi.color
+                )}>
+                  <kpi.icon className="w-6 h-6 text-white" />
                 </div>
-                <div className={`p-3 rounded-full ${item.color.replace('text-', 'bg-').replace('500', '100')}`}>
-                  <item.icon className={`h-6 w-6 ${item.color}`} />
+                <div className={cn("text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-white/5", kpi.trendColor)}>
+                  {kpi.trend}
                 </div>
               </div>
-              <div className="mt-4 flex items-center text-xs font-medium text-zinc-400">
-                <span className="text-emerald-600 flex items-center bg-emerald-50 px-2 py-0.5 rounded-full mr-2">
-                  <Activity className="w-3 h-3 mr-1" /> {item.trend}
-                </span>
-                <span className="group-hover:translate-x-1 transition-transform flex items-center">
-                  Ver detalles <ArrowUpRight className="w-3 h-3 ml-1" />
-                </span>
+
+              <div className="relative z-10">
+                <h3 className="text-4xl font-black text-white tracking-tighter mb-1">{kpi.value}</h3>
+                <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-1">{kpi.title}</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{kpi.subtext}</p>
               </div>
-              {/* Decorative Gradient glow */}
-              <div className={`absolute -right-6 -bottom-6 w-24 h-24 rounded-full opacity-10 bg-gradient-to-br from-transparent to-current ${item.color} blur-xl group-hover:opacity-20 transition-opacity`} />
-            </Link>
-
-            {/* Insight Balloon */}
-            {activeInsight === item.name && (
-              <KpiInsightBalloon
-                type={item.name}
-                data={insightData}
-                charts={{ requests: requestsData, incidents: incidentsData }}
-                isLast={stats.indexOf(item) >= 2} // Muestra a la izquierda si es de los últimos
-              />
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* CHARTS ROW */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Chart 1: Requests */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-zinc-200">
-          <h3 className="text-lg font-bold text-zinc-900 mb-6 flex items-center">
-            <FileCheck className="w-5 h-5 mr-2 text-blue-500" />
-            Distribución de Solicitudes
-          </h3>
-          <div className="h-72 w-full overflow-x-auto">
-            <div className="min-w-[600px] h-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={requestsData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f4f4f5" />
-                  <XAxis
-                    dataKey="name"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    interval={0}
-                    tick={{ fill: '#71717a' }}
-                  />
-                  <YAxis fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    cursor={{ fill: '#f4f4f5' }}
-                  />
-                  <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
             </div>
-          </div>
+          ))}
         </div>
 
-        {/* Chart 2: Incidents */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-zinc-200">
-          <h3 className="text-lg font-bold text-zinc-900 mb-6 flex items-center">
-            <AlertCircle className="w-5 h-5 mr-2 text-amber-500" />
-            Tipos de Incidencias
-          </h3>
-          <div className="h-72 w-full flex items-center justify-center overflow-x-auto">
-            <div className="min-w-[400px] h-full">
-              {incidentsData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={incidentsData}
-                      cx="50%"
-                      cy="40%"
-                      innerRadius={60}
-                      outerRadius={90}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {incidentsData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                    <Legend verticalAlign="bottom" height={70} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-center text-zinc-400 text-sm flex items-center justify-center h-full">
-                  No hay datos de incidencias registrados.
+        {/* Charts & Activity Area (Mock Visuals) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Chart Card */}
+          <div className="lg:col-span-2 glass-dark rounded-[2.5rem] p-8 border border-white/5 relative overflow-hidden group">
+             <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
+             
+             <div className="flex justify-between items-center mb-8 relative z-10">
+               <div>
+                 <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Productividad Semanal</h3>
+                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Horas registradas vs Estimado</p>
+               </div>
+               <div className="p-3 bg-white/5 rounded-xl border border-white/5">
+                 <LineChart className="w-5 h-5 text-indigo-400" />
+               </div>
+             </div>
+
+             {/* Mock Chart Visualization */}
+             <div className="h-64 flex items-end justify-between gap-2 relative z-10 px-4">
+                {[40, 65, 45, 80, 55, 90, 75].map((height, i) => (
+                  <div key={i} className="relative w-full group/bar">
+                    <div className="absolute bottom-full mb-2 w-full text-center opacity-0 group-hover/bar:opacity-100 transition-opacity">
+                      <span className="text-[10px] font-black text-indigo-400">{height}%</span>
+                    </div>
+                    <div 
+                      className="w-full bg-gradient-to-t from-indigo-600/20 to-indigo-500/40 rounded-t-lg border-t border-indigo-400/50 hover:from-indigo-500 hover:to-blue-400 transition-all duration-300"
+                      style={{ height: `${height}%` }}
+                    ></div>
+                  </div>
+                ))}
+             </div>
+             
+             <div className="flex justify-between text-[10px] font-black text-slate-600 uppercase tracking-widest mt-4 px-4 relative z-10">
+               <span>Lunes</span>
+               <span>Martes</span>
+               <span>Miércoles</span>
+               <span>Jueves</span>
+               <span>Viernes</span>
+               <span>Sábado</span>
+               <span>Domingo</span>
+             </div>
+          </div>
+
+          {/* Activity Feed */}
+          <div className="glass-dark rounded-[2.5rem] p-8 border border-white/5 relative flex flex-col">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Eventos Recientes</h3>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Últimas 24 Horas</p>
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-6">
+              {[
+                { icon: CheckCircle2, text: "Nómina semanal autorizada", time: "Hace 2 min", color: "text-emerald-400" },
+                { icon: Users, text: "2 nuevos empleados registrados", time: "Hace 1 hora", color: "text-blue-400" },
+                { icon: AlertCircle, text: "Falta de asistencia reportada", time: "Hace 3 horas", color: "text-red-400" },
+                { icon: Clock, text: "Ajuste de horarios en Proyecto B", time: "Ayer", color: "text-amber-400" },
+              ].map((ev, i) => (
+                <div key={i} className="flex gap-4 items-start group">
+                  <div className="mt-1">
+                    <ev.icon className={cn("w-4 h-4", ev.color)} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">{ev.text}</p>
+                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{ev.time}</p>
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* RECENT ACTIVITY */}
-      <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
-        <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-zinc-900 flex items-center">
-            <Clock className="w-5 h-5 mr-2 text-zinc-500" />
-            Actividad Reciente
-          </h3>
-          <Link href="/solicitudes" className="text-sm font-medium text-amber-600 hover:text-amber-700 hover:underline">
-            Ver todo el historial
-          </Link>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-zinc-100">
-            <thead className="bg-zinc-50/50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Folio</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Empleado</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Trámite</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Fecha</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-zinc-100">
-              {recentActivity.map((act) => (
-                <tr key={act.id_solicitud} className="hover:bg-zinc-50/50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-900">{act.folio}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-600">
-                    {act.empleados?.nombre} {act.empleados?.apellido_paterno}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-600">
-                    {act.cat_tipos_solicitud?.tipo_solicitud}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500">
-                    {new Date(act.creado_el).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
-                                            ${act.estatus === 'Aprobada' || act.estatus === 'Autorizada RH' || act.estatus === 'Ejecutada' ? 'bg-green-100 text-green-800' :
-                        act.estatus === 'Rechazada' || act.estatus === 'Cancelada' ? 'bg-red-100 text-red-800' :
-                          'bg-amber-100 text-amber-800'}`}>
-                      {act.estatus}
-                    </span>
-                  </td>
-                </tr>
               ))}
-              {recentActivity.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-zinc-400 text-sm">
-                    No hay actividad reciente.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+            </div>
+
+            <button className="w-full mt-6 py-3 rounded-xl border border-white/10 text-xs font-black text-slate-400 uppercase tracking-widest hover:bg-white hover:text-black transition-colors">
+              Ver Historial Completo
+            </button>
+          </div>
         </div>
-      </div>
 
-    </div>
-  )
-}
-
-function KpiInsightBalloon({ type, data, charts, isLast }: { type: string, data: any, charts: any, isLast?: boolean }) {
-  if (!data) return null
-
-  let content = null
-
-  if (type === 'Empleados Activos') {
-    content = (
-      <div className="space-y-2">
-        <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest mb-2">Distribución por Depto</p>
-        {data.depts?.slice(0, 4).map((d: any) => (
-          <div key={d.name} className="flex justify-between items-center text-[11px]">
-            <span className="text-zinc-600 truncate mr-2">{d.name}</span>
-            <span className="font-bold text-indigo-600">{d.count}</span>
-          </div>
-        ))}
-      </div>
-    )
-  } else if (type === 'Incidencias Activas') {
-    content = (
-      <div className="space-y-2">
-        <p className="text-[10px] font-black text-red-900 uppercase tracking-widest mb-2">Principales Motivos</p>
-        {charts.incidents?.slice(0, 4).map((i: any) => (
-          <div key={i.name} className="flex justify-between items-center text-[11px]">
-            <span className="text-zinc-600 truncate mr-2">{i.name}</span>
-            <span className="font-bold text-red-600">{i.value}</span>
-          </div>
-        ))}
-      </div>
-    )
-  } else if (type === 'Solicitudes Pendientes') {
-    content = (
-      <div className="space-y-2">
-        <p className="text-[10px] font-black text-blue-900 uppercase tracking-widest mb-2">Últimas en Revisión</p>
-        {data.pending?.slice(0, 3).map((p: any) => (
-          <div key={p.id_solicitud} className="text-[10px] bg-blue-50/50 p-1.5 rounded border border-blue-100 mb-1 last:mb-0">
-            <span className="font-bold text-blue-700">{p.folio}</span>
-            <p className="text-zinc-500 truncate">{p.empleados?.nombre} - {p.cat_tipos_solicitud?.tipo_solicitud}</p>
-          </div>
-        ))}
-      </div>
-    )
-  } else if (type === 'Departamentos') {
-    content = (
-      <div className="space-y-2">
-        <p className="text-[10px] font-black text-emerald-900 uppercase tracking-widest mb-2">Estructura Organizacional</p>
-        <p className="text-[11px] text-zinc-500 italic">Gestión de centros de costos y jerarquías activas.</p>
-        <div className="pt-2 border-t border-emerald-100">
-          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">CATÁLOGO COMPLETO</span>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className={`absolute top-0 ${isLast ? 'right-full mr-4' : 'left-full ml-4'} z-[100] w-64 animate-in fade-in slide-in-from-top-2 duration-300 pointer-events-none hidden lg:block`}>
-      <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white p-4 ring-1 ring-zinc-200/50">
-        <div className={`w-2 h-2 absolute top-8 ${isLast ? '-right-1 border-r border-t' : '-left-1 border-l border-b'} rotate-45 border-zinc-200 bg-white`} />
-        {content}
       </div>
     </div>
   )

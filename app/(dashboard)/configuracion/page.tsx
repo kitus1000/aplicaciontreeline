@@ -3,10 +3,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/utils/supabase/client'
 import Link from 'next/link'
-import { Save, Building, Upload, CheckCircle, Shield, Settings, Calendar as CalendarIcon, Database, Trash2, AlertCircle, Download } from 'lucide-react'
+import { Save, Building, Upload, CheckCircle, Shield, Settings, Calendar as CalendarIcon, Database, Trash2, AlertCircle, Download, UserPlus, DollarSign } from 'lucide-react'
 import { exportMultiSheetExcel, parseMultiSheetExcel } from '@/utils/excelUtils'
+import { useI18n } from '@/lib/i18n'
 
 export default function ConfiguracionPage() {
+    const { t } = useI18n()
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [configId, setConfigId] = useState<string | null>(null)
@@ -99,7 +101,6 @@ export default function ConfiguracionPage() {
                 { name: 'Empleados', table: 'empleados' },
                 { name: 'Departamentos', table: 'cat_departamentos' },
                 { name: 'Puestos', table: 'cat_puestos' },
-                { name: 'Unidades', table: 'cat_unidades_trabajo' },
                 { name: 'Tipos Checada', table: 'cat_tipos_checada' },
                 { name: 'Turnos', table: 'turnos' },
                 { name: 'Dispositivos', table: 'dispositivos_checadores' },
@@ -141,7 +142,6 @@ export default function ConfiguracionPage() {
             const restoreOrder = [
                 { name: 'Departamentos', table: 'cat_departamentos', conflict: 'id_departamento' },
                 { name: 'Puestos', table: 'cat_puestos', conflict: 'id_puesto' },
-                { name: 'Unidades', table: 'cat_unidades_trabajo', conflict: 'id_unidad' },
                 { name: 'Tipos Checada', table: 'cat_tipos_checada', conflict: 'id' },
                 { name: 'Turnos', table: 'turnos', conflict: 'id' },
                 { name: 'Dispositivos', table: 'dispositivos_checadores', conflict: 'id' },
@@ -227,8 +227,8 @@ export default function ConfiguracionPage() {
         <div className="space-y-6 animate-in fade-in duration-500 max-w-4xl mx-auto">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-6">
                 <div>
-                    <h2 className="text-2xl font-bold text-zinc-900 uppercase tracking-wide">Configuración Institucional</h2>
-                    <p className="text-sm text-zinc-500">Defina la identidad de la empresa para documentos y reportes.</p>
+                    <h2 className="text-2xl font-bold text-zinc-900 uppercase tracking-wide">{t('config_title')}</h2>
+                    <p className="text-sm text-zinc-500">{t('config_desc')}</p>
                 </div>
                 <div className="flex items-center space-x-3">
                     <Link
@@ -236,21 +236,28 @@ export default function ConfiguracionPage() {
                         className="flex items-center space-x-2 bg-amber-50 text-amber-700 border border-amber-200 px-4 py-2 rounded-md font-bold hover:bg-amber-100 transition-colors"
                     >
                         <Settings className="w-4 h-4" />
-                        <span>Ajustes de Sistema</span>
+                        <span>{t('sys_settings')}</span>
                     </Link>
                     <Link
                         href="/configuracion/festivos"
                         className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 border border-indigo-200 px-4 py-2 rounded-md font-bold hover:bg-indigo-100 transition-colors"
                     >
                         <CalendarIcon className="w-4 h-4" />
-                        <span>Días Festivos</span>
+                        <span>{t('holidays')}</span>
+                    </Link>
+                    <Link
+                        href="/configuracion/reglas-pago"
+                        className="flex items-center space-x-2 bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-md font-bold hover:bg-emerald-100 transition-colors"
+                    >
+                        <DollarSign className="w-4 h-4" />
+                        <span>TABULADOR</span>
                     </Link>
                     <Link
                         href="/configuracion/usuarios"
-                        className="flex items-center space-x-2 bg-zinc-100 text-zinc-900 px-4 py-2 rounded-md font-bold hover:bg-zinc-200 transition-colors"
+                        className="flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-md font-bold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20"
                     >
-                        <Shield className="w-4 h-4" />
-                        <span>Gestión de Usuarios</span>
+                        <UserPlus className="w-4 h-4" />
+                        <span>GESTIÓN USUARIOS</span>
                     </Link>
                     <button
                         onClick={handleSave}
@@ -258,7 +265,7 @@ export default function ConfiguracionPage() {
                         className="flex items-center space-x-2 bg-black text-white px-6 py-2 rounded-md font-bold hover:bg-zinc-800 transition-colors disabled:opacity-50"
                     >
                         {saving ? <span className="animate-spin">⏳</span> : <Save className="w-5 h-5" />}
-                        <span>Guardar Cambios</span>
+                        <span>{t('save_changes')}</span>
                     </button>
                 </div>
             </div>
@@ -266,28 +273,28 @@ export default function ConfiguracionPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* Logo Section */}
                 <div className="md:col-span-1 space-y-4">
-                    <label className="block text-sm font-bold text-zinc-700">Logotipo Institucional</label>
+                    <label className="block text-sm font-bold text-zinc-700">{t('company_logo')}</label>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-zinc-200 flex flex-col items-center justify-center text-center space-y-4 h-64">
                         {formData.logo_base64 ? (
                             <div className="relative w-full h-full flex items-center justify-center bg-zinc-50 rounded-lg p-4 overflow-hidden group">
                                 <img src={formData.logo_base64} alt="Company Logo" className="max-w-full max-h-full object-contain" />
                                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <p className="text-white text-xs font-bold">Cambiar Imagen</p>
+                                    <p className="text-white text-xs font-bold">{t('change_image')}</p>
                                 </div>
                             </div>
                         ) : (
                             <div className="text-zinc-300 flex flex-col items-center">
                                 <Building className="w-16 h-16 mb-2" />
-                                <span className="text-xs">Sin logotipo</span>
+                                <span className="text-xs">{t('no_logo')}</span>
                             </div>
                         )}
                         <label className="cursor-pointer bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-4 py-2 rounded-md text-sm font-medium transition-colors w-full flex items-center justify-center">
                             <Upload className="w-4 h-4 mr-2" />
-                            {formData.logo_base64 ? "Reemplazar" : "Subir Logo"}
+                            {formData.logo_base64 ? t('replace') : t('upload_logo')}
                             <input type="file" onChange={handleLogoUpload} accept="image/*" className="hidden" />
                         </label>
                     </div>
-                    <p className="text-xs text-zinc-400 text-center">Recomendado: PNG o JPG con fondo transparente.</p>
+                    <p className="text-xs text-zinc-400 text-center">{t('logo_recommendation')}</p>
                 </div>
 
                 {/* Form Fields */}
@@ -295,7 +302,7 @@ export default function ConfiguracionPage() {
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-zinc-200 space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="col-span-2">
-                                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Nombre de la Empresa / Razón Social</label>
+                                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">{t('company_name_label')}</label>
                                 <input
                                     type="text"
                                     value={formData.nombre_empresa}
@@ -306,7 +313,7 @@ export default function ConfiguracionPage() {
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">RFC</label>
+                                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">{t('rfc')}</label>
                                 <input
                                     type="text"
                                     value={formData.rfc}
@@ -317,7 +324,7 @@ export default function ConfiguracionPage() {
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Registro Patronal (IMSS)</label>
+                                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">{t('employer_registry')}</label>
                                 <input
                                     type="text"
                                     value={formData.registro_patronal}
@@ -328,7 +335,7 @@ export default function ConfiguracionPage() {
                             </div>
 
                             <div className="col-span-2">
-                                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Dirección Fiscal Completa</label>
+                                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">{t('fiscal_address')}</label>
                                 <textarea
                                     rows={3}
                                     value={formData.direccion}
@@ -342,8 +349,8 @@ export default function ConfiguracionPage() {
                         <div className="bg-amber-50 p-4 rounded-lg flex items-start">
                             <CheckCircle className="w-5 h-5 text-amber-600 mt-0.5 mr-2" />
                             <div>
-                                <h4 className="text-sm font-bold text-amber-800">Uso de la información</h4>
-                                <p className="text-xs text-amber-700 mt-1">Estos datos aparecerán automáticamente en el encabezado de los formatos PDF (Vacaciones, Bajas, etc.) generados por la plataforma.</p>
+                                <h4 className="text-sm font-bold text-amber-800">{t('data_usage')}</h4>
+                                <p className="text-xs text-amber-700 mt-1">{t('data_usage_desc')}</p>
                             </div>
                         </div>
                     </div>
@@ -354,7 +361,7 @@ export default function ConfiguracionPage() {
             <div className="mt-12 border-t border-zinc-200 pt-12">
                 <div className="flex items-center space-x-2 mb-6">
                     <Database className="w-6 h-6 text-zinc-400" />
-                    <h3 className="text-xl font-bold text-zinc-900 uppercase tracking-wide">Mantenimiento de Datos</h3>
+                    <h3 className="text-xl font-bold text-zinc-900 uppercase tracking-wide">{t('data_maintenance')}</h3>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -364,15 +371,15 @@ export default function ConfiguracionPage() {
                                 <Download className="w-6 h-6 text-zinc-600" />
                             </div>
                             <div>
-                                <h4 className="text-sm font-bold text-zinc-900">Respaldo Completo</h4>
-                                <p className="text-xs text-zinc-500">Descarga toda la base de datos en un solo Excel.</p>
+                                <h4 className="text-sm font-bold text-zinc-900">{t('full_backup')}</h4>
+                                <p className="text-xs text-zinc-500">{t('full_backup_desc')}</p>
                             </div>
                         </div>
                         <button
                             onClick={handleFullBackup}
                             className="bg-zinc-900 text-white px-4 py-2 rounded-md text-xs font-bold hover:bg-zinc-800 transition-colors"
                         >
-                            Exportar Todo
+                            {t('export_all')}
                         </button>
                     </div>
 
@@ -382,15 +389,15 @@ export default function ConfiguracionPage() {
                                 <Trash2 className="w-6 h-6 text-red-600" />
                             </div>
                             <div>
-                                <h4 className="text-sm font-bold text-red-900">Reinicio Nuclear</h4>
-                                <p className="text-xs text-red-600/70">Wipe total de datos para un nuevo inicio.</p>
+                                <h4 className="text-sm font-bold text-red-900">{t('nuclear_reset')}</h4>
+                                <p className="text-xs text-red-600/70">{t('nuclear_reset_desc')}</p>
                             </div>
                         </div>
                         <button
                             onClick={handleNuclearReset}
                             className="bg-red-600 text-white px-4 py-2 rounded-md text-xs font-bold hover:bg-red-700 transition-colors shadow-sm"
                         >
-                            Borrar Todo
+                            {t('delete_all')}
                         </button>
                     </div>
 
@@ -400,8 +407,8 @@ export default function ConfiguracionPage() {
                                 <Upload className="w-6 h-6 text-emerald-600" />
                             </div>
                             <div>
-                                <h4 className="text-sm font-bold text-zinc-900">Importar Respaldo</h4>
-                                <p className="text-xs text-zinc-500">Restaura el sistema desde un archivo Excel multi-pestaña.</p>
+                                <h4 className="text-sm font-bold text-zinc-900">{t('import_backup')}</h4>
+                                <p className="text-xs text-zinc-500">{t('import_backup_desc')}</p>
                             </div>
                         </div>
                         <input
@@ -415,15 +422,33 @@ export default function ConfiguracionPage() {
                             onClick={() => backupInputRef.current?.click()}
                             className="bg-emerald-600 text-white px-4 py-2 rounded-md text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
                         >
-                            Importar Todo
+                            {t('import_all')}
                         </button>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-indigo-50 to-white p-6 rounded-xl border-2 border-indigo-100 flex items-center justify-between group hover:border-indigo-300 transition-all shadow-md">
+                        <div className="flex items-center space-x-4">
+                            <div className="p-3 bg-white rounded-lg group-hover:bg-indigo-50 transition-colors shadow-sm">
+                                <UserPlus className="w-6 h-6 text-indigo-600" />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-black text-zinc-900 uppercase tracking-tight italic">Gestión de Accesos</h4>
+                                <p className="text-xs text-zinc-500">Crear usuarios para Trabajadores y Jefes.</p>
+                            </div>
+                        </div>
+                        <Link
+                            href="/configuracion/usuarios"
+                            className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-black hover:bg-indigo-500 transition-all shadow-lg uppercase tracking-widest"
+                        >
+                            GESTIONAR
+                        </Link>
                     </div>
                 </div>
 
                 <div className="mt-4 p-4 bg-zinc-50 rounded-lg flex items-start border border-zinc-100">
                     <AlertCircle className="w-5 h-5 text-zinc-400 mt-0.5 mr-2" />
                     <p className="text-[10px] text-zinc-500 italic">
-                        Nota: El reinicio nuclear borra <b>únicamente empleados, historiales, solicitudes y asistencias</b>. Se conservarán los departamentos, puestos, festivos, roles y tipos de incidencias para que el calendario y la estructura operen sin problemas al añadir nuevo personal.
+                        Nota: {t('reset_note')}
                     </p>
                 </div>
             </div>

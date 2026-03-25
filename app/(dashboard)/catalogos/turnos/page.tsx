@@ -1,13 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Clock, Plus, Trash2, CalendarDays, KeyRound, ArrowLeft, Edit, X } from 'lucide-react'
+import { Clock, Plus, Trash2, CalendarDays, ArrowLeft, Edit, X } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/utils/supabase/client'
+import { useI18n } from '@/lib/i18n'
 
 export default function TurnosPage() {
+    const { t, language } = useI18n()
     const [turnos, setTurnos] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [fetchError, setFetchError] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [editId, setEditId] = useState<string | null>(null)
 
@@ -28,12 +31,20 @@ export default function TurnosPage() {
 
     async function fetchTurnos() {
         setLoading(true)
+        setFetchError(null)
         try {
             const res = await fetch('/api/turnos')
             const data = await res.json()
-            setTurnos(data || [])
-        } catch (error) {
+            if (Array.isArray(data)) {
+                setTurnos(data)
+            } else {
+                setFetchError(data.error || (language === 'es' ? 'Respuesta inesperada del servidor' : 'Unexpected server response'))
+                setTurnos([])
+            }
+        } catch (error: any) {
             console.error(error)
+            setFetchError(language === 'es' ? 'Error de red' : 'Network error')
+            setTurnos([])
         } finally {
             setLoading(false)
         }
@@ -50,7 +61,7 @@ export default function TurnosPage() {
                 cancelEdit()
                 fetchTurnos()
             } catch (error: any) {
-                alert('Error al actualizar: ' + error.message)
+                alert(t('save_shift_error') + ': ' + error.message)
             } finally {
                 setIsSubmitting(false)
             }
@@ -68,10 +79,10 @@ export default function TurnosPage() {
                 cancelEdit()
                 fetchTurnos()
             } else {
-                alert('Error al guardar: ' + result.error)
+                alert(t('save_shift_error') + ': ' + result.error)
             }
         } catch (error) {
-            alert('Error de conectividad')
+            alert(language === 'es' ? 'Error de conectividad' : 'Connectivity error')
         } finally {
             setIsSubmitting(false)
         }
@@ -105,14 +116,14 @@ export default function TurnosPage() {
     }
 
     async function eliminarTurno(id: string) {
-        if (!confirm('¿Seguro que deseas eliminar este turno? Los empleados asignados a este volverán a no tener turno programado.')) return
+        if (!confirm(t('delete_shift_confirm'))) return
         try {
             const res = await fetch(`/api/turnos?id=${id}`, { method: 'DELETE' })
             const result = await res.json()
             if (result.ok) {
                 fetchTurnos()
             } else {
-                alert('Error al eliminar: ' + result.error)
+                alert(t('delete_shift_error') + ': ' + result.error)
             }
         } catch (error) {
             console.error(error)
@@ -129,10 +140,10 @@ export default function TurnosPage() {
                         </Link>
                         <h1 className="text-2xl font-bold text-zinc-900 flex items-center gap-2">
                             <CalendarDays className="w-6 h-6 text-indigo-600" />
-                            Programador de Horarios (Turnos)
+                            {t('shifts_title')}
                         </h1>
                     </div>
-                    <p className="text-sm text-zinc-500 mt-1 ml-[52px]">Configura las ventanas de trabajo para que el Kiosko calcule retardos automáticamente.</p>
+                    <p className="text-sm text-zinc-500 mt-1 ml-[52px]">{t('shifts_subtitle')}</p>
                 </div>
             </div>
 
@@ -142,29 +153,29 @@ export default function TurnosPage() {
                 <div className="col-span-1 bg-white p-6 rounded-lg border border-zinc-200 shadow-sm h-fit">
                     <div className="flex items-center justify-between border-b pb-2 mb-4">
                         <h2 className="text-lg font-bold text-zinc-800 flex items-center gap-2">
-                            {editId ? <><Edit className="w-4 h-4 text-amber-600" /> Editar Turno</> : <><Plus className="w-4 h-4 text-green-600" /> Crear Nuevo Turno</>}
+                            {editId ? <><Edit className="w-4 h-4 text-amber-600" /> {t('edit_shift')}</> : <><Plus className="w-4 h-4 text-green-600" /> {t('create_shift')}</>}
                         </h2>
                         {editId && (
                             <button onClick={cancelEdit} className="text-xs text-zinc-500 hover:text-red-600 flex items-center">
-                                <X className="w-3 h-3 mr-1" /> Cancelar
+                                <X className="w-3 h-3 mr-1" /> {t('cancel')}
                             </button>
                         )}
                     </div>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
-                            <label className="block text-xs font-semibold text-zinc-600 uppercase mb-1">Nombre (ej. Matutino 1)</label>
+                            <label className="block text-xs font-semibold text-zinc-600 uppercase mb-1">{t('shift_name')}</label>
                             <input
                                 required
                                 type="text"
                                 className="w-full text-black rounded-md border-zinc-300 text-sm focus:ring-black focus:border-black"
                                 value={form.nombre}
                                 onChange={e => setForm({ ...form, nombre: e.target.value })}
-                                placeholder="Ej: Primer Turno"
+                                placeholder={t('shift_name_placeholder')}
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-semibold text-zinc-600 uppercase mb-1">Hora Entrada</label>
+                                <label className="block text-xs font-semibold text-zinc-600 uppercase mb-1">{t('check_in_time')}</label>
                                 <input
                                     required
                                     type="time"
@@ -174,7 +185,7 @@ export default function TurnosPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-zinc-600 uppercase mb-1">Hora Salida</label>
+                                <label className="block text-xs font-semibold text-zinc-600 uppercase mb-1">{t('check_out_time')}</label>
                                 <input
                                     required
                                     type="time"
@@ -186,7 +197,7 @@ export default function TurnosPage() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-semibold text-zinc-600 uppercase mb-1">Tolerancia (Min)</label>
+                                <label className="block text-xs font-semibold text-zinc-600 uppercase mb-1">{t('tolerance_label')}</label>
                                 <input
                                     required
                                     type="number"
@@ -195,10 +206,10 @@ export default function TurnosPage() {
                                     value={form.tolerancia_min}
                                     onChange={e => setForm({ ...form, tolerancia_min: Number(e.target.value) })}
                                 />
-                                <p className="text-[10px] text-zinc-500 mt-1">Límite para marcar Retardo.</p>
+                                <p className="text-[10px] text-zinc-500 mt-1">{t('tolerance_desc')}</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-zinc-600 uppercase mb-1">Límite Falta (Min)</label>
+                                <label className="block text-xs font-semibold text-zinc-600 uppercase mb-1">{t('absence_limit_label')}</label>
                                 <input
                                     required
                                     type="number"
@@ -207,7 +218,7 @@ export default function TurnosPage() {
                                     value={form.limite_falta_min}
                                     onChange={e => setForm({ ...form, limite_falta_min: Number(e.target.value) })}
                                 />
-                                <p className="text-[10px] text-red-500 mt-1 font-medium">Exceder este límite marca Falta.</p>
+                                <p className="text-[10px] text-red-500 mt-1 font-medium">{t('absence_limit_desc')}</p>
                             </div>
                         </div>
 
@@ -216,7 +227,7 @@ export default function TurnosPage() {
                             disabled={isSubmitting}
                             className={`w-full flex justify-center items-center text-white font-bold py-2 px-4 rounded-md transition-colors disabled:opacity-50 mt-2 shadow-sm ${editId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                         >
-                            {isSubmitting ? 'Guardando...' : editId ? 'Actualizar Turno' : 'Guardar Turno'}
+                            {isSubmitting ? t('saving') : editId ? t('update_shift') : t('save_shift')}
                         </button>
                     </form>
                 </div>
@@ -227,46 +238,48 @@ export default function TurnosPage() {
                         <table className="min-w-full divide-y divide-zinc-200 text-left">
                             <thead className="bg-zinc-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Nombre</th>
-                                    <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Horario</th>
-                                    <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Tolerancia</th>
-                                    <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Límite Falta</th>
-                                    <th className="px-6 py-3 text-right text-xs font-bold text-zinc-500 uppercase tracking-wider">Acciones</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">{t('name')}</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">{t('time')}</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">{t('tolerance_label')}</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">{t('absence_limit_label')}</th>
+                                    <th className="px-6 py-3 text-right text-xs font-bold text-zinc-500 uppercase tracking-wider">{t('actions')}</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-zinc-200">
                                 {loading ? (
-                                    <tr><td colSpan={4} className="px-6 py-4 text-center text-sm text-zinc-500">Cargando turnos...</td></tr>
+                                    <tr><td colSpan={5} className="px-6 py-4 text-center text-sm text-zinc-500">{t('loading_shifts')}</td></tr>
+                                ) : fetchError ? (
+                                    <tr><td colSpan={5} className="px-6 py-4 text-center text-sm text-red-500 font-medium">{fetchError}</td></tr>
                                 ) : turnos.length === 0 ? (
-                                    <tr><td colSpan={4} className="px-6 py-4 text-center text-sm text-zinc-500 font-medium italic">Empieza creando el primer Turno de operaciones.</td></tr>
+                                    <tr><td colSpan={5} className="px-6 py-4 text-center text-sm text-zinc-500 font-medium italic">{t('no_shifts')}</td></tr>
                                 ) : (
-                                    turnos.map(t => (
-                                        <tr key={t.id} className="hover:bg-zinc-50 transition-colors">
+                                    turnos.map(t_item => (
+                                        <tr key={t_item.id} className="hover:bg-zinc-50 transition-colors">
                                             <td className="px-6 py-4">
-                                                <div className="font-bold text-zinc-900">{t.nombre}</div>
+                                                <div className="font-bold text-zinc-900">{t_item.nombre}</div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center space-x-2 text-sm text-zinc-700 font-medium">
                                                     <Clock className="w-4 h-4 text-indigo-500" />
-                                                    <span>{t.hora_inicio.slice(0, 5)} a {t.hora_fin.slice(0, 5)}</span>
+                                                    <span>{t_item.hora_inicio.slice(0, 5)} a {t_item.hora_fin.slice(0, 5)}</span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                                    {t.tolerancia_min} min.
+                                                    {t_item.tolerancia_min} min.
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
-                                                    {'>'} {t.limite_falta_min || 60} min.
+                                                    {'>'} {t_item.limite_falta_min || 60} min.
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end space-x-2">
-                                                    <button onClick={() => loadToEdit(t)} className="text-zinc-400 hover:text-amber-600 transition-colors p-2 rounded-md hover:bg-amber-50">
+                                                    <button onClick={() => loadToEdit(t_item)} className="text-zinc-400 hover:text-amber-600 transition-colors p-2 rounded-md hover:bg-amber-50">
                                                         <Edit className="w-5 h-5" />
                                                     </button>
-                                                    <button onClick={() => eliminarTurno(t.id)} className="text-zinc-400 hover:text-red-600 transition-colors p-2 rounded-md hover:bg-red-50">
+                                                    <button onClick={() => eliminarTurno(t_item.id)} className="text-zinc-400 hover:text-red-600 transition-colors p-2 rounded-md hover:bg-red-50">
                                                         <Trash2 className="w-5 h-5" />
                                                     </button>
                                                 </div>

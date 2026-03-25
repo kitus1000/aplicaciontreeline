@@ -131,6 +131,14 @@ export default function EmpleadoDetallePage() {
             setTipoAsignacion('horario')
         }
 
+        // Fetch regla de pago
+        const { data: payRule } = await supabase
+            .from('employee_pay_rules')
+            .select('*')
+            .eq('employee_id', id)
+            .eq('scope_type', 'individual')
+            .maybeSingle()
+
         if (!error && data) {
             setEmpleado(data)
 
@@ -166,7 +174,11 @@ export default function EmpleadoDetallePage() {
                 // Salario
                 salario_diario: latestSalario?.salario_diario || '',
                 id_empleado_salario: latestSalario?.id_empleado_salario || null,
-                salario_original: latestSalario?.salario_diario || ''
+                salario_original: latestSalario?.salario_diario || '',
+                
+                // Regla de pago actual
+                tipo_sueldo: payRule?.payment_type || 'dia',
+                tarifa_hora: payRule?.hourly_rate || ''
             })
         }
         setLoading(false)
@@ -318,23 +330,18 @@ export default function EmpleadoDetallePage() {
                 if (bankError) console.error("Error banco:", bankError)
             }
 
-            // 5. Upsert Salario Diario
-            if (editForm.salario_diario && parseFloat(editForm.salario_diario) !== parseFloat(editForm.salario_original || 0)) {
-                const isCorrection = editForm.id_empleado_salario ? true : false
-                const salarioData = isCorrection ? {
-                    id_empleado_salario: editForm.id_empleado_salario,
-                    id_empleado: id,
-                    salario_diario: parseFloat(editForm.salario_diario)
-                } : {
-                    id_empleado: id,
-                    salario_diario: parseFloat(editForm.salario_diario),
-                    fecha_inicio_vigencia: editForm.fecha_ingreso || new Date().toISOString().split('T')[0],
-                    motivo: 'Salario Inicial / Ajuste'
-                }
+            // 5. Upsert Salario Diario (Legacy) - Omitimos montos monetarios aquí
+            // solo actualizamos el esquema de la regla de pago
+            const { error: ruleError } = await supabase.from('employee_pay_rules').upsert({
+                employee_id: id,
+                scope_type: 'individual',
+                payment_type: editForm.tipo_sueldo,
+                hourly_rate: 0, // Se mantiene 0 o el valor previo; la edición monetaria es en Reglas de Pago
+                daily_rate: 0,
+                active: true
+            }, { onConflict: 'scope_type,employee_id' })
 
-                const { error: salError } = await supabase.from('empleado_salarios').upsert(salarioData)
-                if (salError) console.error("Error salario:", salError)
-            }
+            if (ruleError) console.error("Error pay rule:", ruleError)
 
             // Refresh data
             fetchEmpleado()
@@ -739,16 +746,52 @@ export default function EmpleadoDetallePage() {
                                             <label className="block text-xs font-medium text-zinc-500 mb-1">Fecha Ingreso</label>
                                             <input type="date" className="w-full text-sm border-zinc-300 rounded-md text-black bg-white" value={editForm.fecha_ingreso} onChange={e => setEditForm({ ...editForm, fecha_ingreso: e.target.value })} />
                                         </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-zinc-500 mb-1">Sueldo Diario Base Vigente</label>
-                                            <input type="number" step="0.01" className="w-full text-sm border-zinc-300 rounded-md text-black bg-white" value={editForm.salario_diario} onChange={e => setEditForm({ ...editForm, salario_diario: e.target.value })} />
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                {editForm.salario_diario && editForm.fecha_ingreso && (
-                                                    <span className="text-green-600 font-bold bg-green-50 p-1 rounded inline-block">
-                                                        SDI Calculado: ${calculateSDI(parseFloat(editForm.salario_diario), editForm.fecha_ingreso)}
-                                                    </span>
-                                                )}
-                                            </p>
+
+                                        <div className="col-span-1 md:col-span-2 mt-4 pt-4 border-t border-zinc-200">
+                                            <h4 className="text-sm font-bold text-zinc-900 mb-4">Esquema de Pago Worktrack</h4>
+                                            
+                                            <div className="mb-4 bg-zinc-50 p-4 rounded-lg border border-zinc-200">
+                                                <div className="flex space-x-6">
+                                                    <label className="flex items-center space-x-2 cursor-pointer">
+                                                        <input
+                                                            type="radio"
+                                                            name="edit_tipo_sueldo"
+                                                            value="dia"
+                                                            checked={editForm.tipo_sueldo === 'dia'}
+                                                            onChange={() => setEditForm({ ...editForm, tipo_sueldo: 'dia' })}
+                                                            className="text-amber-600 focus:ring-amber-500"
+                                                        />
+                                                        <span className="text-sm font-medium text-zinc-700">Sueldo por Día</span>
+                                                    </label>
+                                                    <label className="flex items-center space-x-2 cursor-pointer">
+                                                        <input
+                                                            type="radio"
+                                                            name="edit_tipo_sueldo"
+                                                            value="hora"
+                                                            checked={editForm.tipo_sueldo === 'hora'}
+                                                            onChange={() => setEditForm({ ...editForm, tipo_sueldo: 'hora' })}
+                                                            className="text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                        <span className="text-sm font-medium text-zinc-700">Sueldo por Hora</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            {editForm.tipo_sueldo === 'dia' ? (
+                                                <div className="bg-amber-50 p-4 rounded-lg border border-amber-100">
+                                                    <p className="text-xs text-amber-700 font-medium">
+                                                        Este empleado está bajo el esquema de <b>Sueldo por Día</b>.
+                                                        Las tarifas se gestionan en el módulo de <a href="/configuracion/reglas-pago" className="underline font-bold">Reglas de Pago</a>.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                                    <p className="text-xs text-blue-700 font-medium">
+                                                        Este empleado está bajo el esquema de <b>Sueldo por Hora</b>.
+                                                        La tarifa de pago se asigna en el módulo de <a href="/configuracion/reglas-pago" className="underline font-bold">Reglas de Pago</a>.
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}

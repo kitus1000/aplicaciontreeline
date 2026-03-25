@@ -31,11 +31,11 @@ export async function POST(request: Request) {
         }
 
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
         if (!supabaseUrl || !supabaseKey) {
             console.error("Missing Supabase Env Variables", { url: !!supabaseUrl, key: !!supabaseKey });
-            return NextResponse.json({ ok: false, error_code: 'CONFIG_ERROR', mensaje: 'Falta configuración en el servidor.' }, { status: 500, headers: corsHeaders })
+            return NextResponse.json({ ok: false, error_code: 'CONFIG_ERROR', mensaje: 'Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor.' }, { status: 500, headers: corsHeaders })
         }
 
         const supabase = createClient(supabaseUrl, supabaseKey)
@@ -208,54 +208,60 @@ export async function POST(request: Request) {
             }
         }
         else if (emp.id_turno && (tipo_checada === 'ENTRADA' || tipo_checada === 'COMIDA_REGRESO')) {
-            const { data: turno, error: turnoError } = await supabase.from('turnos').select('*').eq('id', emp.id_turno).single()
+            const { data: turno } = await supabase.from('turnos').select('*').eq('id', emp.id_turno).single()
 
-            if (turnoError || !turno) {
-                console.error('Error cargando turno:', turnoError)
-                return NextResponse.json({
-                    ok: false,
-                    error_code: 'TURNO_NOT_FOUND',
-                    mensaje: `Error: No se pudo cargar tu horario asignado (${emp.id_turno}). Verifica los permisos SQL.`
-                }, { status: 400, headers: corsHeaders })
-            }
+            if (turno) {
+                turnoSeleccionado = turno
 
-            turnoSeleccionado = turno
+                const horaObjetivoStr = turno.hora_inicio
+                const [horaTurno, minTurno] = horaObjetivoStr.split(':').map(Number)
+                const totalMinutosTurno = (horaTurno * 60) + minTurno
 
-            const horaObjetivoStr = turno.hora_inicio
-            const [horaTurno, minTurno] = horaObjetivoStr.split(':').map(Number)
-            const totalMinutosTurno = (horaTurno * 60) + minTurno
+                const difMinutos = totalMinutosActual - totalMinutosTurno
 
-            const difMinutos = totalMinutosActual - totalMinutosTurno
-
-            if (difMinutos > (turno.limite_falta_min || 60)) {
-                estatus_puntualidad = 'FALTA'
-                retardo_minutos = difMinutos
-            } else if (difMinutos > (turno.tolerancia_min || 0)) {
-                estatus_puntualidad = 'RETARDO'
-                retardo_minutos = difMinutos
+                if (difMinutos > (turno.limite_falta_min || 60)) {
+                    estatus_puntualidad = 'FALTA'
+                    retardo_minutos = difMinutos
+                } else if (difMinutos > (turno.tolerancia_min || 0)) {
+                    estatus_puntualidad = 'RETARDO'
+                    retardo_minutos = difMinutos
+                }
+            } else {
+                estatus_puntualidad = 'SIN_TURNO'
             }
         } else if (!emp.id_turno && (tipo_checada === 'ENTRADA' || tipo_checada === 'COMIDA_REGRESO')) {
             estatus_puntualidad = 'SIN_TURNO'
         }
 
-        // 4. Registrar Checada
+        // 4. Registrar Checada (Legacy + New)
+        const checadaData = {
+            id_empleado: emp.id_empleado,
+            tipo_checada: tipo_checada,
+            fecha_local: fecha_local,
+            estatus_puntualidad,
+            retardo_minutos,
+            id_permiso: permisoValidoId,
+            id_turno: emp.id_turno || null,
+            metodo_identificacion: metodo || 'ID_MANUAL',
+            origen: origenInput || 'android',
+            timestamp_checada: baseDate.toISOString(),
+            es_manual: es_manual || false
+        }
+
         const { data: checada, error: insertError } = await supabase
             .from('checadas')
-            .insert([{
-                id_empleado: emp.id_empleado,
-                tipo_checada: tipo_checada,
-                fecha_local: fecha_local,
-                estatus_puntualidad,
-                retardo_minutos,
-                id_permiso: permisoValidoId,
-                id_turno: emp.id_turno || null, // Guardar el turno auditado
-                metodo_identificacion: metodo || 'ID_MANUAL',
-                origen: origenInput || 'android',
-                timestamp_checada: baseDate.toISOString(),
-                es_manual: es_manual || false
-            }])
+            .insert([checadaData])
             .select()
             .single()
+
+        // NEW: Also write to 'workday_events' for Worktrack RH
+        await supabase.from('workday_events').insert([{
+            employee_id: emp.id_empleado,
+            date: fecha_local,
+            event_type: tipo_checada,
+            event_time: baseDate.toISOString(),
+            source: origenInput || 'kiosko'
+        }])
 
         if (insertError) {
             console.error('Error insertando checada:', insertError)
