@@ -81,9 +81,18 @@ export default function EvidenceGalleryPage() {
       for (const ev of dateFiltered) {
         if (!ev.storage_url) continue
         try {
-          const response = await fetch(ev.storage_url)
-          if (!response.ok) throw new Error('Network response was not ok')
-          const blob = await response.blob()
+          // Robust download via Supabase Client to avoid CORS issues with direct fetch
+          const urlParts = ev.storage_url.split('/worktrack-evidences/')
+          if (urlParts.length < 2) continue
+          
+          const filePath = urlParts[1].split('?')[0] // Remove query params if any
+          const { data: blob, error } = await supabase.storage.from('worktrack-evidences').download(filePath)
+          
+          if (error || !blob) {
+            console.error('Error downloading from storage:', filePath, error)
+            continue
+          }
+
           const folderName = `${ev.empleado.nombre}_${ev.empleado.apellido_paterno}`.replace(/[^a-zA-Z0-9]/g, '_')
           const uniqueId = String(ev.id).substring(0, 6)
           const fileName = `${ev.activity_description || 'Evidencia'}_${format(new Date(ev.created_at || ev.date), 'HH-mm-ss')}_${uniqueId}.jpg`.replace(/[^a-zA-Z0-9_.-]/g, '_')

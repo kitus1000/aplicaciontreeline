@@ -22,7 +22,10 @@ import {
   User as UserIcon,
   Save,
   RefreshCw,
-  X
+  X,
+  Edit2,
+  Check,
+  RotateCcw
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { format, startOfWeek, addDays, isSameDay, subWeeks, addWeeks } from 'date-fns'
@@ -40,6 +43,8 @@ export default function MyWorkTodayPage() {
   const [events, setEvents] = useState<any[]>([])
   const [activities, setActivities] = useState<any[]>([])
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [editingEventId, setEditingEventId] = useState<string | null>(null)
+  const [editTimeValue, setEditTimeValue] = useState<string>('')
 
   const [activityDesc, setActivityDesc] = useState('')
   const [activityHours, setActivityHours] = useState('')
@@ -138,6 +143,42 @@ export default function MyWorkTodayPage() {
       fetchData()
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message || 'Error al cerrar el día.' })
+    }
+  }
+
+  const handleDeleteEvent = async (id: string) => {
+    if (!confirm('¿Seguro que deseas eliminar este registro de asistencia?')) return
+    try {
+      const { error } = await supabase.from('workday_events').delete().eq('id', id)
+      if (error) throw error
+      setMessage({ type: 'success', text: 'Registro eliminado correctamente.' })
+      fetchData()
+    } catch (e: any) {
+      setMessage({ type: 'error', text: 'Error al eliminar: ' + e.message })
+    }
+  }
+
+  const handleSaveEdit = async (ev: any) => {
+    if (!editTimeValue) return
+    try {
+      // Preserve the original date, just change the time
+      const originalDate = new Date(ev.event_time)
+      const [hours, minutes] = editTimeValue.split(':')
+      const newDate = new Date(originalDate)
+      newDate.setHours(parseInt(hours), parseInt(minutes), 0, 0)
+      
+      const { error } = await supabase
+        .from('workday_events')
+        .update({ event_time: newDate.toISOString() })
+        .eq('id', ev.id)
+      
+      if (error) throw error
+      
+      setEditingEventId(null)
+      setMessage({ type: 'success', text: 'Registro actualizado correctamente.' })
+      fetchData()
+    } catch (e: any) {
+      setMessage({ type: 'error', text: 'Error al actualizar: ' + e.message })
     }
   }
 
@@ -414,7 +455,11 @@ export default function MyWorkTodayPage() {
                   <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">{t('day_records')}</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {(['ENTRADA','COMIDA_SALIDA','COMIDA_REGRESO','SALIDA_FINAL'] as const).map((tipo) => {
-                      const ev = events.find((e: any) => e.event_type === tipo)
+                      const ev = events.find((e: any) => {
+                        if (tipo === 'SALIDA_FINAL') return e.event_type === 'SALIDA_FINAL' || e.event_type === 'SALIDA' || e.event_type === 'SALIDA_FINAL_ALT'
+                        if (tipo === 'ENTRADA') return e.event_type === 'ENTRADA' || e.event_type === 'CHECK_IN'
+                        return e.event_type === tipo
+                      })
                       const meta: Record<string, {label: string, color: string}> = {
                         'ENTRADA':        { label: t('entrada'),    color: 'indigo' },
                         'COMIDA_SALIDA':  { label: t('comida_out'), color: 'amber'  },
@@ -423,7 +468,7 @@ export default function MyWorkTodayPage() {
                       }
                       const m = meta[tipo]
                       return (
-                        <div key={tipo} className={cn("rounded-2xl p-3 border text-center",
+                        <div key={tipo} className={cn("rounded-2xl p-3 border text-center relative group/box",
                           ev ? (
                             m.color === 'indigo' ? "bg-indigo-500/10 border-indigo-500/30" :
                             m.color === 'amber'  ? "bg-amber-500/10  border-amber-500/30"  :
@@ -433,13 +478,55 @@ export default function MyWorkTodayPage() {
                         )}>
                           <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">{m.label}</p>
                           {ev ? (
-                            <p className={cn("text-sm font-black mt-1",
-                              m.color === 'indigo' ? "text-indigo-300" :
-                              m.color === 'amber'  ? "text-amber-300"  :
-                              m.color === 'cyan'   ? "text-cyan-300"   : "text-rose-300"
-                            )}>
-                              {new Date(ev.event_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                            </p>
+                            <div className="mt-1">
+                              {editingEventId === ev.id ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <input 
+                                    type="time" 
+                                    value={editTimeValue}
+                                    onChange={(e) => setEditTimeValue(e.target.value)}
+                                    className="bg-slate-900 border border-indigo-500/50 rounded-lg text-xs font-black text-white px-1 py-0.5 outline-none w-full max-w-[80px]"
+                                  />
+                                  <div className="flex items-center gap-2">
+                                    <button onClick={() => handleSaveEdit(ev)} className="p-1 bg-emerald-500/20 text-emerald-400 rounded-md hover:bg-emerald-500/40 transition-colors">
+                                      <Check className="w-3 h-3" />
+                                    </button>
+                                    <button onClick={() => setEditingEventId(null)} className="p-1 bg-slate-800 text-slate-400 rounded-md hover:bg-slate-700 transition-colors">
+                                      <RotateCcw className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <p className={cn("text-sm font-black",
+                                    m.color === 'indigo' ? "text-indigo-300" :
+                                    m.color === 'amber'  ? "text-amber-300"  :
+                                    m.color === 'cyan'   ? "text-cyan-300"   : "text-rose-300"
+                                  )}>
+                                    {new Date(ev.event_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                  </p>
+                                  
+                                  {/* Hover Actions */}
+                                  <div className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover/box:opacity-100 transition-opacity">
+                                    <button 
+                                      onClick={() => {
+                                        setEditingEventId(ev.id)
+                                        setEditTimeValue(new Date(ev.event_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }))
+                                      }}
+                                      className="p-1 bg-white/5 hover:bg-white/10 rounded-md text-slate-400 hover:text-white transition-colors border border-white/5"
+                                    >
+                                      <Edit2 className="w-2.5 h-2.5" />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDeleteEvent(ev.id)}
+                                      className="p-1 bg-red-500/5 hover:bg-red-500/20 rounded-md text-red-400/60 hover:text-red-400 transition-colors border border-white/5"
+                                    >
+                                      <Trash2 className="w-2.5 h-2.5" />
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           ) : (
                             <p className="text-xs text-slate-700 font-mono mt-1">--:--</p>
                           )}

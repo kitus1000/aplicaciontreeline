@@ -17,7 +17,7 @@ type EstadoChecador =
     | 'EXITO'
     | 'ERROR'
 
-type TipoChecada = 'ENTRADA' | 'SALIDA' | 'COMIDA_SALIDA' | 'COMIDA_REGRESO' | 'PERMISO_PERSONAL' | 'REGRESO_PERMISO_PERSONAL' | 'SALIDA_OPERACIONES' | 'REGRESO_OPERACIONES' | 'SALIDA_FINAL'
+type TipoChecada = 'ENTRADA' | 'SALIDA' | 'COMIDA_SALIDA' | 'COMIDA_REGRESO' | 'PERMISO_PERSONAL' | 'REGRESO_PERMISO_PERSONAL' | 'SALIDA_OPERACIONES' | 'REGRESO_OPERACIONES' | 'SALIDA_FINAL' | 'SALIDA_FINAL_ALT'
 
 interface ChecadaDef {
     id: TipoChecada
@@ -28,14 +28,14 @@ interface ChecadaDef {
 
 const TIPOS_CHECADA: ChecadaDef[] = [
     { id: 'ENTRADA', color: 'bg-green-600 hover:bg-green-500', icon: <LogIn className="w-8 h-8 mb-2 mx-auto" />, requiereCodigo: false },
-    { id: 'SALIDA', color: 'bg-red-600 hover:bg-red-500', icon: <LogOut className="w-8 h-8 mb-2 mx-auto" />, requiereCodigo: false },
+    { id: 'SALIDA_FINAL', color: 'bg-red-600 hover:bg-red-500', icon: <LogOut className="w-8 h-8 mb-2 mx-auto" />, requiereCodigo: false },
     { id: 'COMIDA_SALIDA', color: 'bg-amber-500 hover:bg-amber-400', icon: <Coffee className="w-8 h-8 mb-2 mx-auto" />, requiereCodigo: false },
     { id: 'COMIDA_REGRESO', color: 'bg-amber-600 hover:bg-amber-500', icon: <LogIn className="w-8 h-8 mb-2 mx-auto" />, requiereCodigo: false },
     { id: 'PERMISO_PERSONAL', color: 'bg-blue-600 hover:bg-blue-500', icon: <LogOut className="w-8 h-8 mb-2 mx-auto" />, requiereCodigo: true },
     { id: 'REGRESO_PERMISO_PERSONAL', color: 'bg-blue-500 hover:bg-blue-400', icon: <LogIn className="w-8 h-8 mb-2 mx-auto" />, requiereCodigo: false },
     { id: 'SALIDA_OPERACIONES', color: 'bg-indigo-600 hover:bg-indigo-500', icon: <LogOut className="w-8 h-8 mb-2 mx-auto" />, requiereCodigo: true },
     { id: 'REGRESO_OPERACIONES', color: 'bg-indigo-500 hover:bg-indigo-400', icon: <LogIn className="w-8 h-8 mb-2 mx-auto" />, requiereCodigo: false },
-    { id: 'SALIDA_FINAL', color: 'bg-red-800 hover:bg-red-700', icon: <LogOut className="w-8 h-8 mb-2 mx-auto" />, requiereCodigo: false },
+    { id: 'SALIDA_FINAL_ALT', color: 'bg-red-800 hover:bg-red-700', icon: <LogOut className="w-8 h-8 mb-2 mx-auto" />, requiereCodigo: false },
 ]
 
 
