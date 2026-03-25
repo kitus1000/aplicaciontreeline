@@ -13,21 +13,39 @@ export default function WebCamera({ onCapture, onClose }: WebCameraProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
+  const [quality, setQuality] = useState<'low' | 'medium' | 'high'>('high')
   const [permissionError, setPermissionError] = useState(false)
   const [isCapturing, setIsCapturing] = useState(false)
+  // Store stream locally to stop it predictably without dependency array nightmares
+  const currentStreamRef = useRef<MediaStream | null>(null)
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (currentMode: string, currentQual: string) => {
     try {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop())
+      if (currentStreamRef.current) {
+        currentStreamRef.current.getTracks().forEach((track) => track.stop())
       }
 
       setPermissionError(false)
+      
+      let videoConstraints: any = { facingMode: currentMode }
+      
+      if (currentQual === 'low') {
+        videoConstraints.width = { ideal: 640 }
+        videoConstraints.height = { ideal: 480 }
+      } else if (currentQual === 'medium') {
+        videoConstraints.width = { ideal: 1280 }
+        videoConstraints.height = { ideal: 720 }
+      } else if (currentQual === 'high') {
+        videoConstraints.width = { ideal: 1920 }
+        videoConstraints.height = { ideal: 1080 }
+      }
+
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode },
+        video: videoConstraints,
         audio: false
       })
 
+      currentStreamRef.current = mediaStream
       setStream(mediaStream)
 
       if (videoRef.current) {
@@ -37,26 +55,25 @@ export default function WebCamera({ onCapture, onClose }: WebCameraProps) {
       console.error('Error accessing camera:', err)
       setPermissionError(true)
     }
-  }, [facingMode])
+  }, [])
 
   useEffect(() => {
-    startCamera()
+    startCamera(facingMode, quality)
+
     return () => {
-      // Clean up the stream when closing
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop())
+      if (currentStreamRef.current) {
+        currentStreamRef.current.getTracks().forEach(track => track.stop())
       }
     }
-  }, [facingMode])
+  }, [facingMode, quality, startCamera])
 
   useEffect(() => {
-    // Ensuring the stream stops if component unmounts unexpectedly
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop())
+      if (currentStreamRef.current) {
+        currentStreamRef.current.getTracks().forEach(track => track.stop())
       }
     }
-  }, [stream])
+  }, [])
 
   const handleCapture = () => {
     if (!videoRef.current || !canvasRef.current || !stream) return
@@ -93,7 +110,7 @@ export default function WebCamera({ onCapture, onClose }: WebCameraProps) {
            onClose()
         }
         setIsCapturing(false)
-      }, 'image/jpeg', 0.9)
+      }, 'image/jpeg', quality === 'high' ? 0.9 : quality === 'medium' ? 0.75 : 0.6)
     } else {
        onClose()
     }
@@ -109,22 +126,33 @@ export default function WebCamera({ onCapture, onClose }: WebCameraProps) {
       <div className="absolute top-0 left-0 w-full p-4 flex justify-between items-center z-10 bg-gradient-to-b from-black/80 to-transparent">
         <button 
           onClick={() => {
-            if (stream) {
-              stream.getTracks().forEach(track => track.stop())
+            if (currentStreamRef.current) {
+              currentStreamRef.current.getTracks().forEach(track => track.stop())
             }
             onClose()
           }}
-          className="p-3 bg-white/10 rounded-full text-white backdrop-blur-md hover:bg-white/20 transition-all"
+          className="p-3 bg-white/10 rounded-full text-white backdrop-blur-md hover:bg-white/20 transition-all shadow-lg"
         >
           <X className="w-6 h-6" />
         </button>
         
-        <button 
-          onClick={handleToggleCamera}
-          className="p-3 bg-white/10 rounded-full text-white backdrop-blur-md hover:bg-white/20 transition-all"
-        >
-          <FlipHorizontal className="w-6 h-6" />
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setQuality(q => q === 'high' ? 'medium' : q === 'medium' ? 'low' : 'high')}
+            className="px-4 py-2 bg-indigo-600/60 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md hover:bg-indigo-500 transition-all border border-indigo-500/30 shadow-lg"
+            title="Cambiar Calidad"
+          >
+            {quality === 'high' ? 'HQ 1080p' : quality === 'medium' ? 'MQ 720p' : 'LQ 480p'}
+          </button>
+          
+          <button 
+            onClick={handleToggleCamera}
+            className="p-3 bg-white/10 rounded-full text-white backdrop-blur-md hover:bg-white/20 transition-all shadow-lg"
+            title="Cambiar Cámara"
+          >
+            <FlipHorizontal className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {permissionError ? (
@@ -151,10 +179,10 @@ export default function WebCamera({ onCapture, onClose }: WebCameraProps) {
             </label>
             
             <button 
-              onClick={startCamera}
-              className="px-6 py-3 bg-slate-800 text-slate-300 rounded-xl font-bold hover:bg-slate-700 transition-colors w-full flex justify-center items-center gap-2"
+              onClick={() => startCamera(facingMode, quality)}
+              className="px-6 py-3 bg-slate-800 text-slate-300 rounded-xl font-bold hover:bg-slate-700 transition-colors w-full flex justify-center items-center gap-2 shadow-lg"
             >
-              <RefreshCw className="w-4 h-4" /> REINTENTAR WEBRTC
+              <RefreshCw className="w-4 h-4" /> REINTENTAR CÁMARA
             </button>
           </div>
         </div>
