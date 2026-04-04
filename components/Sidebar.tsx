@@ -22,7 +22,9 @@ import {
     ChevronDown,
     TrendingUp,
     Camera,
-    DollarSign
+    DollarSign,
+    Wallet,
+    PieChart
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useI18n } from '@/lib/i18n'
@@ -114,6 +116,13 @@ export function Sidebar() {
                 { name: t('menu_prepayroll'), href: '/prenomina/resumen', icon: Files, color: 'text-indigo-400' },
                 { name: t('menu_receipts'), href: '/prenomina/recibos', icon: FileText, color: 'text-cyan-400' },
                 { name: `${t('gallery')} ${t('evidences')}`, href: '/evidencias', icon: Camera, color: 'text-pink-400' },
+            ]
+        }] : []),
+        ...(isHR ? [{
+            title: t('menu_group_finances'),
+            items: [
+                { name: t('menu_registradora'), href: '/finanzas/registradora', icon: Wallet, color: 'text-green-400' },
+                { name: t('menu_business_center'), href: '/finanzas/centro-negocios', icon: PieChart, color: 'text-blue-400' },
             ]
         }] : []),
         {

@@ -106,17 +106,9 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Force Light Mode inputs globally as requested - High Specificity */
-:root input,
-:root textarea,
-:root select,
-body input,
-body textarea,
-body select {
-  color: #000000 !important;
-  background-color: #ffffff !important;
-  -webkit-text-fill-color: #000000 !important;
-  /* For Safari/Chrome specific override */
+/* Standard Input Overrides */
+input, textarea, select {
+  outline: none;
 }
 
 /* Ensure placeholders are visible but distinct */

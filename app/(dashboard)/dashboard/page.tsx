@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/utils/supabase/client'
+import { useI18n } from '@/lib/i18n'
 import { Users, TrendingUp, Clock, ShieldAlert, Zap, HardHat, CheckCircle2, LineChart, Activity, AlertCircle, Camera } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
@@ -71,43 +72,45 @@ export default function KPIDashboardPage() {
     })
   }
 
+  const { t } = useI18n()
+
   const kpis = [
     {
-      title: "Personal Registrado",
+      title: t('kpi_registered_staff'),
       value: stats.empleados.toString(),
-      subtext: "Colaboradores en sistema",
+      subtext: t('kpi_registered_staff_sub'),
       icon: Users,
-      trend: "Total",
+      trend: t('kpi_trend_total'),
       trendColor: "text-blue-400",
       color: "from-blue-500 to-indigo-600",
       glow: "bg-blue-500/20"
     },
     {
-      title: "Personal Activo Hoy",
+      title: t('kpi_active_today'),
       value: (stats as any).active?.toString() || "0",
-      subtext: "Entradas registradas hoy",
+      subtext: t('kpi_active_today_sub'),
       icon: Activity,
-      trend: "En sitio",
+      trend: t('kpi_trend_onsite'),
       trendColor: "text-emerald-400",
       color: "from-emerald-500 to-teal-600",
       glow: "bg-emerald-500/20"
     },
     {
-      title: "Evidencias Enviadas",
+      title: t('kpi_evidence_sent'),
       value: stats.proyectos.toString(),
-      subtext: "Fotos capturadas hoy",
+      subtext: t('kpi_evidence_sent_sub'),
       icon: Camera,
-      trend: "Visual",
+      trend: t('kpi_trend_visual'),
       trendColor: "text-pink-400",
       color: "from-pink-500 to-rose-600",
       glow: "bg-pink-500/20"
     },
     {
-      title: "Solicitudes",
+      title: t('kpi_requests'),
       value: stats.pendientes.toString(),
-      subtext: "Pendientes de revisión",
+      subtext: t('kpi_requests_sub'),
       icon: ShieldAlert,
-      trend: "Acción Requerida",
+      trend: t('kpi_trend_action'),
       trendColor: "text-red-400",
       color: "from-orange-500 to-red-600",
       glow: "bg-red-500/20"
@@ -136,16 +139,16 @@ export default function KPIDashboardPage() {
               Dashboard <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-blue-500">KPIs</span>
             </h1>
             <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em] max-w-lg leading-relaxed">
-              Métricas Operativas y de Rendimiento <br />
-              <span className="text-indigo-400/50">Datos en Tiempo Real</span>
+              {t('kpi_operational_metrics')} <br />
+              <span className="text-indigo-400/50">{t('kpi_realtime')}</span>
             </p>
           </div>
           
           <div className="hidden lg:flex items-center gap-8 glass-dark px-8 py-4 rounded-3xl border border-white/5">
             <Activity className="w-8 h-8 text-indigo-400 animate-pulse" />
             <div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Status General</p>
-              <p className="text-xl font-black text-emerald-400 uppercase tracking-widest">Óptimo</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">{t('kpi_status_general')}</p>
+              <p className="text-xl font-black text-emerald-400 uppercase tracking-widest">{t('kpi_status_optimal')}</p>
             </div>
           </div>
         </header>
@@ -190,8 +193,8 @@ export default function KPIDashboardPage() {
              
              <div className="flex justify-between items-center mb-8 relative z-10">
                <div>
-                 <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Productividad Semanal</h3>
-                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Horas registradas vs Estimado</p>
+                 <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">{t('kpi_weekly_productivity')}</h3>
+                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t('kpi_hours_vs_estimate')}</p>
                </div>
                <div className="p-3 bg-white/5 rounded-xl border border-white/5">
                  <LineChart className="w-5 h-5 text-indigo-400" />
@@ -235,10 +238,10 @@ export default function KPIDashboardPage() {
 
             <div className="flex-1 space-y-6">
               {[
-                { icon: CheckCircle2, text: "Nómina semanal autorizada", time: "Hace 2 min", color: "text-emerald-400" },
-                { icon: Users, text: "2 nuevos empleados registrados", time: "Hace 1 hora", color: "text-blue-400" },
-                { icon: AlertCircle, text: "Falta de asistencia reportada", time: "Hace 3 horas", color: "text-red-400" },
-                { icon: Clock, text: "Ajuste de horarios en Proyecto B", time: "Ayer", color: "text-amber-400" },
+                { icon: CheckCircle2, text: t('kpi_event_payroll'), time: t('kpi_event_time_2min'), color: "text-emerald-400" },
+                { icon: Users, text: t('kpi_event_employees'), time: t('kpi_event_time_1h'), color: "text-blue-400" },
+                { icon: AlertCircle, text: t('kpi_event_absence'), time: t('kpi_event_time_3h'), color: "text-red-400" },
+                { icon: Clock, text: t('kpi_event_schedule'), time: t('kpi_event_yesterday'), color: "text-amber-400" },
               ].map((ev, i) => (
                 <div key={i} className="flex gap-4 items-start group">
                   <div className="mt-1">
@@ -253,7 +256,7 @@ export default function KPIDashboardPage() {
             </div>
 
             <button className="w-full mt-6 py-3 rounded-xl border border-white/10 text-xs font-black text-slate-400 uppercase tracking-widest hover:bg-white hover:text-black transition-colors">
-              Ver Historial Completo
+              {t('kpi_view_full_history')}
             </button>
           </div>
         </div>

@@ -7,8 +7,22 @@ export default function AboutPage() {
         <div className="max-w-4xl mx-auto space-y-12 py-8 page-transition">
             {/* Hero Section */}
             <div className="text-center space-y-4">
-                <div className="inline-flex items-center justify-center p-6 bg-indigo-600 rounded-3xl shadow-2xl shadow-indigo-500/20 mb-4 animate-pulse neon-border">
-                    <ShieldCheck className="w-12 h-12 text-white" />
+                <div className="relative mx-auto w-40 h-40 group mb-6">
+                    <div className="absolute inset-0 rounded-full border-2 border-indigo-500/20 animate-pulse group-hover:border-indigo-500/50 transition-all duration-700" />
+                    <div className="absolute inset-2 rounded-full border-2 border-indigo-500/10 animate-[spin_10s_linear_infinite]" />
+                    <div className="w-full h-full bg-slate-900 rounded-full border border-white/10 shadow-2xl overflow-hidden flex items-center justify-center p-4 relative z-10">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img 
+                            src="/apptuz_logo.png" 
+                            alt="Apptuz Digital Logo" 
+                            className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]"
+                            onError={(e) => {
+                                // Fallback icon if image is missing
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.parentElement?.insertAdjacentHTML('beforeend', '<div class="text-white font-black italic text-4xl">A</div>');
+                            }}
+                        />
+                    </div>
                 </div>
                 <h1 className="text-6xl font-black text-white tracking-tighter uppercase italic">
                     Worktrack <span className="text-indigo-400">PRO</span>
@@ -72,10 +86,16 @@ export default function AboutPage() {
                 <div className="text-slate-500 text-[10px] font-black uppercase tracking-[0.5em]">
                     Developed & Managed by:
                 </div>
-                <div className="text-white font-black italic tracking-widest text-2xl uppercase">
-                   J. Raul Mtz M
+                <div className="flex flex-col items-center">
+                    <div className="px-6 py-3 rounded-2xl bg-[#0B0F19] border border-indigo-500/20 shadow-2xl shadow-indigo-500/10 backdrop-blur-md hover:scale-105 transition-transform cursor-default flex items-center gap-4">
+                        <img src="/apptuz_logo.png" alt="Apptuz" className="w-8 h-8 object-contain" />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-black italic tracking-widest text-3xl uppercase drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]">
+                           Apptuz Digital
+                        </span>
+                    </div>
+                    <p className="text-xs text-indigo-400/80 font-bold uppercase tracking-[0.2em] mt-2">Software & Innovation</p>
                 </div>
-                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">© 2026 Worktrack PRO - All rights reserved.</p>
+                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest mt-4">© 2026 Worktrack PRO & Apptuz Digital - All rights reserved.</p>
             </div>
         </div>
     )
