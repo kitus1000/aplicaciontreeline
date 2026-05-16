@@ -116,3 +116,75 @@ input, textarea, select {
   color: #94a3b8 !important;
   opacity: 1 !important;
 }
+
+/* =============================================
+   FORM FIELDS GLOBAL FIX
+   Inputs dentro de contenedores blancos/claros
+   siempre son legibles independientemente del tema
+   ============================================= */
+
+/* Asegura que el fondo de inputs sea blanco cuando
+   su contenedor padre tiene bg-white o similar */
+.form-card input,
+.form-card textarea,
+.form-card select,
+[class*="bg-white"] input:not([class*="bg-"]),
+[class*="bg-white"] textarea:not([class*="bg-"]),
+[class*="bg-white"] select:not([class*="bg-"]),
+[class*="bg-zinc-50"] input:not([class*="bg-"]),
+[class*="bg-zinc-50"] textarea:not([class*="bg-"]),
+[class*="bg-zinc-50"] select:not([class*="bg-"]) {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+}
+
+/* Focus ring ambar para formularios claros */
+.form-card input:focus,
+.form-card textarea:focus,
+.form-card select:focus {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+  outline: none;
+}
+
+/* Placeholder visible */
+.form-card input::placeholder,
+.form-card textarea::placeholder,
+[class*="bg-white"] input::placeholder,
+[class*="bg-white"] textarea::placeholder {
+  color: #9ca3af !important;
+  opacity: 1 !important;
+}
+
+/* Options de select en modo claro */
+.form-card select option,
+[class*="bg-white"] select option,
+[class*="bg-zinc-50"] select option {
+  background-color: #ffffff;
+  color: #1a1a1a;
+}
+
+/* Labels dentro de formularios blancos */
+.form-card label {
+  color: #3f3f46;
+}
+
+/* =============================================
+   INPUT-DARK: Campos para el tema oscuro del dashboard
+   ============================================= */
+.input-dark {
+  background-color: rgba(30, 41, 59, 0.8) !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(255,255,255,0.1) !important;
+}
+.input-dark:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.25);
+}
+.input-dark::placeholder {
+  color: #64748b !important;
+}
+.input-dark option {
+  background-color: #1e293b;
+  color: #f1f5f9;
+}

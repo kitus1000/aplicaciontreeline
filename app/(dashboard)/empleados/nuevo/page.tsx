@@ -161,12 +161,12 @@ export default function NuevoEmpleadoPage() {
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-4">
-                    <Link href="/empleados" className="p-2 rounded-full hover:bg-zinc-200 transition-colors">
-                        <ArrowLeft className="h-6 w-6 text-zinc-600" />
+                    <Link href="/empleados" className="p-2 rounded-full hover:bg-white/10 transition-colors">
+                        <ArrowLeft className="h-6 w-6 text-white" />
                     </Link>
                     <div>
-                        <h1 className="text-2xl font-bold text-zinc-900">{t('new_employee_title')}</h1>
-                        <p className="text-sm text-zinc-500">{t('new_employee_subtitle')}</p>
+                        <h1 className="text-2xl font-bold text-white">{t('new_employee_title')}</h1>
+                        <p className="text-sm text-slate-400">{t('new_employee_subtitle')}</p>
                     </div>
                 </div>
                 <button
@@ -206,7 +206,7 @@ export default function NuevoEmpleadoPage() {
             </div>
 
             {/* Content Container */}
-            <div className="bg-white rounded-lg shadow-sm border border-zinc-200 p-8">
+            <div className="form-card bg-white rounded-lg shadow-sm border border-zinc-200 p-8">
                 
                 {/* Personal Tab */}
                 {activeTab === 'personal' && (

@@ -50,7 +50,7 @@ export default function NuevaSolicitudPage() {
     // Derived state to know which type is selected
     // Derived state/Search logic
     const filteredEmpleados = empleados.filter(e => {
-        if (!searchTerm) return true
+        if (!searchTerm || searchTerm.trim().length < 1) return false
         const term = searchTerm.toLowerCase().trim()
         // If numeric, search ID only
         if (!isNaN(Number(term)) && term !== '') {
@@ -308,9 +308,9 @@ export default function NuevaSolicitudPage() {
 
     return (
         <div className="max-w-3xl mx-auto">
-            <h2 className="text-2xl font-bold text-zinc-900 mb-6 uppercase tracking-wide">Nueva Solicitud</h2>
+            <h2 className="text-2xl font-bold text-white mb-6 uppercase tracking-wide">Nueva Solicitud</h2>
 
-            <div className="bg-white rounded-lg shadow-sm border border-zinc-200 p-8">
+            <div className="form-card bg-white rounded-lg shadow-sm border border-zinc-200 p-8">
                 <form onSubmit={handleSubmit} className="space-y-6">
 
                     {/* 1. Tipo de Solicitud */}
@@ -369,11 +369,11 @@ export default function NuevaSolicitudPage() {
                                     }}
                                     onFocus={() => setShowEmployeeList(true)}
                                 />
-                                {showEmployeeList && (
+                                {showEmployeeList && searchTerm.trim().length >= 1 && (
                                     <div className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm border border-zinc-200">
                                         {filteredEmpleados.length === 0 ? (
                                             <div className="cursor-default select-none relative py-2 px-4 text-zinc-500">
-                                                No se encontraron resultados.
+                                                No se encontraron resultados para &quot;{searchTerm}&quot;
                                             </div>
                                         ) : (
                                             filteredEmpleados.map((emp: any) => (

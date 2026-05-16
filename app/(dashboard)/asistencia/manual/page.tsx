@@ -120,17 +120,17 @@ function ManualCheckInContent() {
         <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500">
             {/* Header */}
             <div className="flex items-center gap-4">
-                <Link href="/asistencia/dashboard" className="p-2 hover:bg-zinc-100 rounded-full transition-colors text-zinc-500">
+                <Link href="/asistencia/dashboard" className="p-2 hover:bg-white/10 rounded-full transition-colors text-white">
                     <ArrowLeft className="w-5 h-5" />
                 </Link>
                 <div>
-                    <h1 className="text-2xl font-bold text-zinc-900">{editId ? 'Editar Registro de Asistencia' : 'Registro de Checada Manual'}</h1>
-                    <p className="text-zinc-500 text-sm">{editId ? 'Corrige los datos del registro seleccionado.' : 'Captura asistencias olvidadas por el personal.'}</p>
+                    <h1 className="text-2xl font-bold text-white">{editId ? 'Editar Registro de Asistencia' : 'Registro de Checada Manual'}</h1>
+                    <p className="text-slate-400 text-sm">{editId ? 'Corrige los datos del registro seleccionado.' : 'Captura asistencias olvidadas por el personal.'}</p>
                 </div>
             </div>
 
             {/* Main Card */}
-            <div className="bg-white rounded-2xl shadow-xl border border-zinc-100 overflow-hidden">
+            <div className="form-card bg-white rounded-2xl shadow-xl border border-zinc-100 overflow-hidden">
                 <div className="p-8 space-y-6">
                     {/* Empleado */}
                     <div className="space-y-2">
