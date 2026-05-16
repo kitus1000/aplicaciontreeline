@@ -73,10 +73,16 @@ export default function UsuariosConfigPage() {
     const handleEmployeeChange = (empId: string) => {
         const emp = employees.find(e => e.id_empleado === empId)
         if (emp) {
+            // Generar usuario: nombre.apellido@empresa.com
+            const cleanName = (emp.nombre || '').split(' ')[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const cleanLastName = (emp.apellido_paterno || '').split(' ')[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const generatedEmail = `${cleanName}.${cleanLastName}@empresa.com`;
+
             setNewForm(prev => ({
                 ...prev,
                 id_empleado: empId,
-                nombre_completo: `${emp.nombre} ${emp.apellido_paterno}`.trim()
+                nombre_completo: `${emp.nombre} ${emp.apellido_paterno}`.trim(),
+                email: generatedEmail
             }))
         } else {
             setNewForm(prev => ({ ...prev, id_empleado: empId }))
