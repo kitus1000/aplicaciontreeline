@@ -83,12 +83,12 @@ export function Sidebar() {
     const handleSignOut = async () => {
         try {
             await supabase.auth.signOut()
-            router.push('/login')
+            router.push('/')
             router.refresh()
         } catch (error) {
             console.error('Logout error:', error)
             // Force redirect anyway
-            window.location.href = '/login'
+            window.location.href = '/'
         }
     }
 
