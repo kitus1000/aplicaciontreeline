@@ -16,7 +16,8 @@ export default function UsuariosConfigPage() {
     const [editForm, setEditForm] = useState({
         nombre_completo: '',
         rol: 'Jefe',
-        id_departamento: ''
+        id_departamento: '',
+        password: ''
     })
     
     const [newForm, setNewForm] = useState({
@@ -66,7 +67,8 @@ export default function UsuariosConfigPage() {
         setEditForm({
             nombre_completo: p.nombre_completo || '',
             rol: p.rol || 'Jefe',
-            id_departamento: p.id_departamento || ''
+            id_departamento: p.id_departamento || '',
+            password: '' // Reset password field
         })
     }
 
@@ -93,7 +95,8 @@ export default function UsuariosConfigPage() {
         if (!editingId) return
         setSaving(true)
         try {
-            const { error } = await supabase
+            // Update Profile
+            const { error: profileError } = await supabase
                 .from('perfiles')
                 .update({
                     nombre_completo: editForm.nombre_completo,
@@ -103,9 +106,27 @@ export default function UsuariosConfigPage() {
                 })
                 .eq('id', editingId)
 
-            if (error) throw error
+            if (profileError) throw profileError
+
+            // Update Password if provided
+            if (editForm.password && editForm.password.trim() !== '') {
+                const res = await fetch('/api/auth/update-user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: editingId,
+                        password: editForm.password
+                    })
+                })
+                const result = await res.json()
+                if (!res.ok) throw new Error(result.message || 'Error al cambiar la contraseña')
+            }
+
             setEditingId(null)
             fetchData()
+            if (editForm.password) {
+                alert('Usuario y contraseña actualizados correctamente.')
+            }
         } catch (e: any) {
             alert('Error al guardar: ' + e.message)
         } finally {
@@ -327,12 +348,22 @@ export default function UsuariosConfigPage() {
                                             </div>
                                             <div className="space-y-0.5">
                                                 {isEditing ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editForm.nombre_completo}
-                                                        onChange={e => setEditForm({ ...editForm, nombre_completo: e.target.value })}
-                                                        className="border-zinc-300 rounded-md text-sm p-1 font-bold"
-                                                    />
+                                                    <div className="space-y-2">
+                                                        <input
+                                                            type="text"
+                                                            value={editForm.nombre_completo}
+                                                            onChange={e => setEditForm({ ...editForm, nombre_completo: e.target.value })}
+                                                            className="border-zinc-300 rounded-md text-sm p-1 font-bold w-full"
+                                                            placeholder="Nombre Completo"
+                                                        />
+                                                        <input
+                                                            type="password"
+                                                            value={editForm.password}
+                                                            onChange={e => setEditForm({ ...editForm, password: e.target.value })}
+                                                            className="border-zinc-300 rounded-md text-sm p-1 font-bold w-full bg-amber-50"
+                                                            placeholder="Nueva Contraseña (opcional)"
+                                                        />
+                                                    </div>
                                                 ) : (
                                                     <div className="font-black text-zinc-900 uppercase tracking-tight">{p.nombre_completo || 'Sin nombre'}</div>
                                                 )}
