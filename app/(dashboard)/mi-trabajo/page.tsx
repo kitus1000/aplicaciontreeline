@@ -149,8 +149,14 @@ export default function MyWorkTodayPage() {
   const handleDeleteEvent = async (id: string) => {
     if (!confirm('¿Seguro que deseas eliminar este registro de asistencia?')) return
     try {
-      const { error } = await supabase.from('workday_events').delete().eq('id', id)
-      if (error) throw error
+      const res = await fetch('/api/delete-event', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      })
+      const result = await res.json()
+      if (!res.ok || !result.ok) throw new Error(result.message || 'Error desconocido al eliminar.')
+      
       setMessage({ type: 'success', text: 'Registro eliminado correctamente.' })
       fetchData()
     } catch (e: any) {
@@ -167,12 +173,13 @@ export default function MyWorkTodayPage() {
       const newDate = new Date(originalDate)
       newDate.setHours(parseInt(hours), parseInt(minutes), 0, 0)
       
-      const { error } = await supabase
-        .from('workday_events')
-        .update({ event_time: newDate.toISOString() })
-        .eq('id', ev.id)
-      
-      if (error) throw error
+      const res = await fetch('/api/update-event', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ev.id, event_time: newDate.toISOString() })
+      })
+      const result = await res.json()
+      if (!res.ok || !result.ok) throw new Error(result.message || 'Error desconocido al actualizar.')
       
       setEditingEventId(null)
       setMessage({ type: 'success', text: 'Registro actualizado correctamente.' })

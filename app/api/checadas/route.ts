@@ -233,39 +233,18 @@ export async function POST(request: Request) {
             estatus_puntualidad = 'SIN_TURNO'
         }
 
-        // 4. Registrar Checada (Legacy + New)
-        const checadaData = {
-            id_empleado: emp.id_empleado,
-            tipo_checada: tipo_checada,
-            fecha_local: fecha_local,
-            estatus_puntualidad,
-            retardo_minutos,
-            id_permiso: permisoValidoId,
-            id_turno: emp.id_turno || null,
-            metodo_identificacion: metodo || 'ID_MANUAL',
-            origen: origenInput || 'android',
-            timestamp_checada: baseDate.toISOString(),
-            es_manual: es_manual || false
-        }
-
-        const { data: checada, error: insertError } = await supabase
-            .from('checadas')
-            .insert([checadaData])
-            .select()
-            .single()
-
-        // NEW: Also write to 'workday_events' for Worktrack RH
-        await supabase.from('workday_events').insert([{
+        // Insertar en workday_events (Tabla actual de RH)
+        const { data: eventData, error: insertError } = await supabase.from('workday_events').insert([{
             employee_id: emp.id_empleado,
             date: fecha_local,
             event_type: tipo_checada,
             event_time: baseDate.toISOString(),
             source: origenInput || 'kiosko'
-        }])
+        }]).select().single()
 
         if (insertError) {
-            console.error('Error insertando checada:', insertError)
-            return NextResponse.json({ ok: false, error_code: 'DB_ERROR', mensaje: 'No se pudo guardar la asistencia.' }, { status: 500, headers: corsHeaders })
+            console.error('Error insertando evento de asistencia:', insertError)
+            return NextResponse.json({ ok: false, error_code: 'DB_ERROR', mensaje: `No se pudo guardar la asistencia. ${insertError.message}` }, { status: 500, headers: corsHeaders })
         }
 
         const nombreCompleto = `${emp.nombre} ${emp.apellido_paterno} ${emp.apellido_materno || ''}`.trim()
@@ -273,7 +252,10 @@ export async function POST(request: Request) {
         const responseData = {
             ok: true,
             checada: {
-                ...checada,
+                id: eventData.id,
+                id_empleado: emp.id_empleado,
+                tipo_checada: tipo_checada,
+                timestamp_checada: baseDate.toISOString(),
                 empleado_nombre: nombreCompleto,
                 turno: turnoSeleccionado ? {
                     nombre: turnoSeleccionado.nombre,
@@ -287,7 +269,7 @@ export async function POST(request: Request) {
                 horario: turnoSeleccionado ? `${turnoSeleccionado.hora_inicio.slice(0, 5)} - ${turnoSeleccionado.hora_fin.slice(0, 5)}` : 'Sin horario'
             },
             tipo: tipo_checada,
-            timestamp: checada.timestamp_checada,
+            timestamp: baseDate.toISOString(),
             estatus_puntualidad,
             retardo_minutos
         }
