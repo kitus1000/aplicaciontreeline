@@ -412,14 +412,18 @@ export default function PayrollSummaryPage() {
   }
 
   const exportToExcel = async () => {
-    // Dynamically import exceljs and file-saver
-    const ExcelJS = (await import('exceljs')).default;
-    const { saveAs } = await import('file-saver');
+    try {
+      // Dynamically import exceljs and file-saver
+      const exceljsModule = await import('exceljs');
+      const ExcelJS = exceljsModule.default || exceljsModule;
+      
+      const fileSaverModule = await import('file-saver');
+      const saveAs = fileSaverModule.default || fileSaverModule.saveAs || fileSaverModule;
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Nómina', {
-      views: [{ showGridLines: false }]
-    });
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Nómina', {
+        views: [{ showGridLines: false }]
+      });
 
     // Company Header
     worksheet.mergeCells('A1:I2');
@@ -515,6 +519,10 @@ export default function PayrollSummaryPage() {
 
     const buffer = await workbook.xlsx.writeBuffer();
     saveAs(new Blob([buffer]), `Nomina_Ejecutiva_${selectedPeriod.end}.xlsx`);
+    } catch (e) {
+      console.error('Error exportando Excel:', e)
+      alert('Error al generar el reporte de Excel. Verifica la consola para más detalles.')
+    }
   }
 
   return (
