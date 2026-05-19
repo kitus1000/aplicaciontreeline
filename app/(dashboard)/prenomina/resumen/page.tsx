@@ -317,9 +317,15 @@ export default function PayrollSummaryPage() {
         }
         realHoursWorked = Math.round(realHoursWorked * 10) / 10
 
-        const totalHours = empActivities.reduce((acc: number, a: any) => acc + (a.hours_dedicated || 0), 0)
-        const totalDays = empWorkdays.length
-        const hoursDelta = Math.round((totalHours - realHoursWorked) * 10) / 10
+        const reportedHours = empActivities.reduce((acc: number, a: any) => acc + (a.hours_dedicated || 0), 0)
+        
+        // AUTO-FALLBACK: Use whichever is higher (reported vs real check-ins) to guarantee they get paid
+        const totalHours = reportedHours > 0 ? reportedHours : realHoursWorked
+        
+        // AUTO-FALLBACK for Days: If they don't have authorized workdays (e.g. no schedule), count the days they checked in
+        const totalDays = empWorkdays.length > 0 ? empWorkdays.length : Object.keys(dateMap).length
+
+        const hoursDelta = Math.round((reportedHours - realHoursWorked) * 10) / 10
         
         let subtotal = 0
         if (empRule?.payment_type === 'hora') {
