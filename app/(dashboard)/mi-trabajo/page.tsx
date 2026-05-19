@@ -46,6 +46,10 @@ export default function MyWorkTodayPage() {
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
   const [editTimeValue, setEditTimeValue] = useState<string>('')
 
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null)
+  const [editActivityDesc, setEditActivityDesc] = useState('')
+  const [editActivityHours, setEditActivityHours] = useState('')
+
   const [activityDesc, setActivityDesc] = useState('')
   const [activityHours, setActivityHours] = useState('')
   const [activityFiles, setActivityFiles] = useState<File[]>([])
@@ -313,6 +317,29 @@ export default function MyWorkTodayPage() {
       fetchData()
     } else {
       setMessage({ type: 'error', text: 'Error al eliminar: ' + result.message })
+    }
+  }
+
+  const saveEditedActivity = async (id: string) => {
+    try {
+      const res = await fetch('/api/update-activity', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          activity_name: editActivityDesc.substring(0, 100),
+          activity_description: editActivityDesc,
+          hours_dedicated: parseFloat(editActivityHours)
+        })
+      })
+      const result = await res.json()
+      if (!res.ok || !result.ok) throw new Error(result.message || 'Error al actualizar')
+      
+      setMessage({ type: 'success', text: 'Actividad actualizada exitosamente.' })
+      setEditingActivityId(null)
+      fetchData()
+    } catch (e: any) {
+      setMessage({ type: 'error', text: 'Error al actualizar: ' + e.message })
     }
   }
 
@@ -738,9 +765,36 @@ export default function MyWorkTodayPage() {
                         <p className="text-[9px] text-slate-500">{new Date(act.created_at || act.date).toLocaleString('es-MX')}</p>
                       </div>
                     </div>
+                  ) : editingActivityId === act.id ? (
+                    <div className="flex flex-col gap-2 w-full pr-4">
+                      <textarea 
+                        value={editActivityDesc}
+                        onChange={(e) => setEditActivityDesc(e.target.value)}
+                        className="w-full text-xs bg-slate-800 border border-indigo-500/50 rounded-lg text-white px-2 py-1 outline-none resize-none input-dark"
+                        rows={2}
+                      />
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          step="0.5"
+                          value={editActivityHours}
+                          onChange={(e) => setEditActivityHours(e.target.value)}
+                          className="w-20 text-xs bg-slate-800 border border-indigo-500/50 rounded-lg text-white px-2 py-1 outline-none input-dark"
+                        />
+                        <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">hrs</span>
+                        <div className="ml-auto flex items-center gap-2">
+                          <button onClick={() => saveEditedActivity(act.id)} className="p-1 bg-emerald-500/20 text-emerald-400 rounded-md hover:bg-emerald-500/40 transition-colors">
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setEditingActivityId(null)} className="p-1 bg-slate-800 text-slate-400 rounded-md hover:bg-slate-700 transition-colors">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
                     <div>
-                      <p className="text-sm font-bold text-white truncate">{act.activity_description || act.activity_name}</p>
+                      <p className="text-sm font-bold text-white whitespace-pre-wrap">{act.activity_description || act.activity_name}</p>
                       <div className="flex items-center gap-3 mt-1">
                         <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">{act.hours_dedicated || 0} hrs</span>
                         <span className="text-[9px] text-slate-600">{act.date}</span>
@@ -748,12 +802,35 @@ export default function MyWorkTodayPage() {
                     </div>
                   )}
                 </div>
-                <button 
-                  onClick={() => deleteActivity(act.id)}
-                  className="p-2 text-red-400 hover:bg-red-500/10 rounded-xl border border-transparent hover:border-red-500/20 transition-all shrink-0"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                
+                {!act.storage_url && editingActivityId !== act.id && (
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <button 
+                      onClick={() => {
+                        setEditingActivityId(act.id)
+                        setEditActivityDesc(act.activity_description || act.activity_name || '')
+                        setEditActivityHours(act.hours_dedicated?.toString() || '0')
+                      }}
+                      className="p-2 text-indigo-400 hover:bg-indigo-500/10 rounded-xl border border-transparent hover:border-indigo-500/20 transition-all"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => deleteActivity(act.id)}
+                      className="p-2 text-red-400 hover:bg-red-500/10 rounded-xl border border-transparent hover:border-red-500/20 transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                {act.storage_url && (
+                  <button 
+                    onClick={() => deleteActivity(act.id)}
+                    className="p-2 text-red-400 hover:bg-red-500/10 rounded-xl border border-transparent hover:border-red-500/20 transition-all shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
