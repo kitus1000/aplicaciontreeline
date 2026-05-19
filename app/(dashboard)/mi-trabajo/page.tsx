@@ -594,7 +594,7 @@ export default function MyWorkTodayPage() {
                          value={activityDesc}
                          onChange={(e) => setActivityDesc(e.target.value)}
                          placeholder="Ej. Colado de losa en área B..."
-                         className="w-full text-base form-pop rounded-[1.5rem] p-6 font-bold text-white placeholder:text-slate-400 border-white/5 focus:border-indigo-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)] bg-slate-800/80 transition-all outline-none resize-none" 
+                         className="w-full text-base form-pop input-dark rounded-[1.5rem] p-6 font-bold text-white placeholder:text-slate-400 border-white/5 focus:border-indigo-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)] bg-slate-800/80 transition-all outline-none resize-none" 
                        />
                     </div>
                     
@@ -609,7 +609,7 @@ export default function MyWorkTodayPage() {
                          value={activityHours}
                          onChange={(e) => setActivityHours(e.target.value)}
                          placeholder="8.0"
-                         className="w-full h-20 form-pop rounded-[1.5rem] px-8 text-3xl font-black text-white placeholder:text-slate-400 border-white/5 focus:border-indigo-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)] bg-slate-800/80 transition-all outline-none" 
+                         className="w-full h-20 form-pop input-dark rounded-[1.5rem] px-8 text-3xl font-black text-white placeholder:text-slate-400 border-white/5 focus:border-indigo-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)] bg-slate-800/80 transition-all outline-none" 
                        />
                     </div>
                  </div>
