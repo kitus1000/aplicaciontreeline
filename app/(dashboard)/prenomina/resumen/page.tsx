@@ -397,22 +397,124 @@ export default function PayrollSummaryPage() {
     }
   }
 
-  const exportToExcel = () => {
-    const data = payrollData.map(p => ({
-      [t('table_employee')]: `${p.nombre} ${p.apellido_paterno}`,
-      [t('pay_scheme')]: p.rule,
-      "Hrs (Ded.)": p.totalHours,
-      "Hrs (Real)": p.realHoursWorked,
-      Delta: p.hoursDelta,
-      [t('days')]: p.totalDays,
-      Subtotal: p.subtotal,
-      [t('receipt_bonuses')]: p.bonusTotal,
-      Total: p.total
-    }))
-    const ws = XLSX.utils.json_to_sheet(data)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Payroll")
-    XLSX.writeFile(wb, `Payroll_Export_${selectedPeriod.start}.xlsx`)
+  const handleDeleteBonus = async (bonusId: string) => {
+    if (!confirm('¿Seguro que deseas eliminar este bono?')) return
+    try {
+      const { error } = await supabase.from('payroll_bonus').delete().eq('id', bonusId)
+      if (error) {
+        throw error
+      }
+      setRefreshKey(prev => prev + 1)
+    } catch (e: any) {
+      console.error(e)
+      alert('Error al eliminar bono. Es posible que no tengas permisos.')
+    }
+  }
+
+  const exportToExcel = async () => {
+    // Dynamically import exceljs and file-saver
+    const ExcelJS = (await import('exceljs')).default;
+    const { saveAs } = await import('file-saver');
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Nómina', {
+      views: [{ showGridLines: false }]
+    });
+
+    // Company Header
+    worksheet.mergeCells('A1:I2');
+    const titleCell = worksheet.getCell('A1');
+    titleCell.value = 'REPORTE EJECUTIVO DE PRENÓMINA';
+    titleCell.font = { name: 'Arial', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Subtitle
+    worksheet.mergeCells('A3:I3');
+    const subtitleCell = worksheet.getCell('A3');
+    subtitleCell.value = `Período: ${selectedPeriod.start} a ${selectedPeriod.end}`;
+    subtitleCell.font = { name: 'Arial', size: 10, italic: true, color: { argb: 'FF475569' } };
+    subtitleCell.alignment = { horizontal: 'center' };
+    
+    worksheet.addRow([]);
+
+    // Table Headers
+    const headers = [
+      'ID', 'EMPLEADO', 'ESQUEMA', 'HRS (REP.)', 'HRS (REAL)', 'DÍAS', 'SUBTOTAL', 'BONOS', 'TOTAL A PAGAR'
+    ];
+    const headerRow = worksheet.addRow(headers);
+    headerRow.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+      cell.font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 10 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
+    });
+    headerRow.height = 25;
+
+    // Table Data
+    let totalPayroll = 0;
+    payrollData.forEach((p, idx) => {
+      totalPayroll += p.total;
+      const row = worksheet.addRow([
+        `#${p.id_empleado}`,
+        `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim(),
+        p.rule?.toUpperCase() || 'DÍA',
+        p.totalHours,
+        p.realHoursWorked,
+        p.totalDays,
+        p.subtotal,
+        p.bonusTotal,
+        p.total
+      ]);
+
+      const isEven = idx % 2 === 0;
+      row.eachCell((cell, colNumber) => {
+        cell.font = { size: 10, color: { argb: 'FF1E293B' } };
+        if (isEven) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        }
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        };
+        // Format Currency for Subtotal, Bonos and Total
+        if ([7, 8, 9].includes(colNumber)) {
+          cell.numFmt = '"$"#,##0.00';
+          cell.font = { bold: colNumber === 9, size: 10, color: { argb: colNumber === 9 ? 'FF047857' : 'FF1E293B' } };
+        }
+        if ([4, 5, 6].includes(colNumber)) {
+          cell.alignment = { horizontal: 'center' };
+        }
+      });
+    });
+
+    // Summary Footer
+    worksheet.addRow([]);
+    const totalRow = worksheet.addRow(['', '', '', '', '', '', '', 'GRAN TOTAL:', totalPayroll]);
+    totalRow.getCell(8).font = { bold: true, size: 12 };
+    totalRow.getCell(8).alignment = { horizontal: 'right' };
+    totalRow.getCell(9).font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+    totalRow.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } };
+    totalRow.getCell(9).numFmt = '"$"#,##0.00';
+    totalRow.getCell(9).alignment = { horizontal: 'right' };
+
+    // Column widths
+    worksheet.getColumn(1).width = 10;
+    worksheet.getColumn(2).width = 35;
+    worksheet.getColumn(3).width = 15;
+    worksheet.getColumn(4).width = 12;
+    worksheet.getColumn(5).width = 12;
+    worksheet.getColumn(6).width = 10;
+    worksheet.getColumn(7).width = 15;
+    worksheet.getColumn(8).width = 15;
+    worksheet.getColumn(9).width = 18;
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `Nomina_Ejecutiva_${selectedPeriod.end}.xlsx`);
   }
 
   return (
@@ -539,13 +641,20 @@ export default function PayrollSummaryPage() {
                   </td>
                   <td className="px-6 py-5">
                     {p.bonusTotal > 0 ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-black text-amber-400 tabular-nums">
-                          +${p.bonusTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                        <span className="text-[9px] font-black bg-amber-400/10 text-amber-400 border border-amber-400/20 px-1.5 py-0.5 rounded-full">
-                          {p.bonuses?.length || 1}
-                        </span>
+                      <div className="flex flex-col gap-1">
+                        {p.bonuses.map((b: any) => (
+                          <div key={b.id} className="flex items-center justify-between gap-2 bg-amber-400/10 border border-amber-400/20 px-2 py-1.5 rounded-lg group/bonus">
+                            <span className="text-xs font-black text-amber-400 tabular-nums whitespace-nowrap">+${parseFloat(b.amount).toFixed(2)}</span>
+                            <span className="text-[10px] font-bold text-amber-300/80 truncate max-w-[80px]" title={b.reason}>{b.reason}</span>
+                            <button 
+                              onClick={() => handleDeleteBonus(b.id)} 
+                              className="text-red-400/50 hover:text-red-400 opacity-0 group-hover/bonus:opacity-100 transition-all p-0.5 rounded-md hover:bg-red-400/10"
+                              title="Eliminar bono"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     ) : (
                       <span className="text-slate-600 text-sm">—</span>
@@ -593,7 +702,7 @@ export default function PayrollSummaryPage() {
                     <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">{t('amount')}</label>
                     <input 
                       type="number" 
-                      className="w-full bg-slate-900 border border-slate-700 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-800/80 border border-slate-700 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:border-indigo-500 input-dark"
                       value={bonusForm.amount}
                       onChange={e => setBonusForm({...bonusForm, amount: parseFloat(e.target.value)})}
                     />
@@ -601,7 +710,7 @@ export default function PayrollSummaryPage() {
                  <div>
                     <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">{t('reason')}</label>
                     <textarea 
-                      className="w-full bg-slate-900 border border-slate-700 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:border-indigo-500 min-h-[100px]"
+                      className="w-full bg-slate-800/80 border border-slate-700 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:border-indigo-500 min-h-[100px] input-dark"
                       value={bonusForm.reason}
                       onChange={e => setBonusForm({...bonusForm, reason: e.target.value})}
                     />
