@@ -46,6 +46,8 @@ export default function PaymentRulesPage() {
         .from('employee_pay_rules')
         .select('*')
         .eq('scope_type', 'global')
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle()
 
       if (globalData) {
@@ -99,15 +101,22 @@ export default function PaymentRulesPage() {
       // Clean payload: ignore ID and metadata to avoid conflicts if they are null or auto
       const { id, created_at, updated_at, ...payload } = globalRule
       
-      const { error } = await supabase
-        .from('employee_pay_rules')
-        .upsert({
-          ...payload,
-          scope_type: 'global',
-          employee_id: null
-        }, { onConflict: 'scope_type,employee_id' })
-
-      if (error) throw error
+      if (id) {
+        const { error } = await supabase
+          .from('employee_pay_rules')
+          .update(payload)
+          .eq('id', id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('employee_pay_rules')
+          .insert({
+            ...payload,
+            scope_type: 'global',
+            employee_id: null
+          })
+        if (error) throw error
+      }
       setMessage({ type: 'success', text: t('success_attendance') })
       fetchData()
     } catch (e: any) {
