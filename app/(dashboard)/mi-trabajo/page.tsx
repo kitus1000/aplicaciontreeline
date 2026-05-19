@@ -230,16 +230,19 @@ export default function MyWorkTodayPage() {
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd')
 
-      const { error: dbError } = await supabase.from('workday_activities').insert([{
-        employee_id: employee.id_empleado,
-        date: dateStr,
-        activity_name: activityDesc.substring(0, 100),
-        activity_description: activityDesc,
-        hours_dedicated: parseFloat(activityHours),
-        storage_url: null
-      }])
-
-      if (dbError) throw dbError
+      const res = await fetch('/api/save-activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_id: employee.id_empleado,
+          date: dateStr,
+          activity_name: activityDesc.substring(0, 100),
+          activity_description: activityDesc,
+          hours_dedicated: parseFloat(activityHours)
+        })
+      })
+      const result = await res.json()
+      if (!res.ok || !result.ok) throw new Error(result.message || 'Error al guardar en BD')
 
       setMessage({ type: 'success', text: '¡Actividades registradas exitosamente!' })
       setActivityDesc('')
@@ -591,7 +594,7 @@ export default function MyWorkTodayPage() {
                          value={activityDesc}
                          onChange={(e) => setActivityDesc(e.target.value)}
                          placeholder="Ej. Colado de losa en área B..."
-                         className="w-full text-base form-pop rounded-[1.5rem] p-6 font-bold text-white border-white/5 focus:border-indigo-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)] bg-slate-900/50 transition-all outline-none resize-none" 
+                         className="w-full text-base form-pop rounded-[1.5rem] p-6 font-bold text-white placeholder:text-slate-400 border-white/5 focus:border-indigo-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)] bg-slate-800/80 transition-all outline-none resize-none" 
                        />
                     </div>
                     
@@ -606,7 +609,7 @@ export default function MyWorkTodayPage() {
                          value={activityHours}
                          onChange={(e) => setActivityHours(e.target.value)}
                          placeholder="8.0"
-                         className="w-full h-20 form-pop rounded-[1.5rem] px-8 text-3xl font-black text-white border-white/5 focus:border-indigo-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)] bg-slate-900/50 transition-all outline-none" 
+                         className="w-full h-20 form-pop rounded-[1.5rem] px-8 text-3xl font-black text-white placeholder:text-slate-400 border-white/5 focus:border-indigo-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)] bg-slate-800/80 transition-all outline-none" 
                        />
                     </div>
                  </div>
