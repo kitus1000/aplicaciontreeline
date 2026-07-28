@@ -215,9 +215,18 @@ export default function AsistenciaDashboard() {
     }
 
     async function eliminarChecada(record: any) {
-        if (!confirm('¿Seguro que deseas eliminar este registro de asistencia/permiso?')) return
+        if (!confirm('¿Seguro que deseas revocar/eliminar este permiso? El trabajador podrá volver a realizar su marcaje de turno en su celular de inmediato.')) return
         const table = record.dbTable || 'workday_events'
         const { error } = await supabase.from(table).delete().eq('id', record.id)
+        
+        if (table === 'permisos_autorizados' && record.empleados?.id_empleado) {
+            await supabase
+                .from('workday_approval_status')
+                .delete()
+                .eq('employee_id', record.empleados.id_empleado)
+                .eq('date', record.fecha_local)
+        }
+
         if (error) alert('Error al eliminar: ' + error.message)
         else fetchChecadas()
     }
