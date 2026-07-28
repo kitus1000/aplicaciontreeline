@@ -90,13 +90,17 @@ export default function KPIDashboardPage() {
       }
 
       // 2. Fetch Active Employees
-      const { data: employees } = await supabase
+      const { data: employees, error: empErr } = await supabase
         .from('empleados')
-        .select('id_empleado, numero_empleado, nombre, apellido_paterno, apellido_materno, estado_empleado, creado_en')
-        .eq('estado_empleado', 'Activo')
+        .select('*')
         .order('nombre', { ascending: true })
 
-      const empList = employees || []
+      if (empErr) console.error('Error al obtener empleados:', empErr)
+
+      const empList = (employees || []).filter(e => 
+        !e.estado_empleado || e.estado_empleado.toLowerCase() === 'activo'
+      )
+      console.log('Empleados activos cargados:', empList.length)
 
       // 3. Fetch Today's Workday Events (TABLA PRINCIPAL - kiosko y app móvil guardan aquí)
       const { data: eventsToday, error: eventsError } = await supabase
