@@ -224,17 +224,36 @@ export default function MiTrabajoProPage() {
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd')
       const fileName = `${employee.id_empleado}/${dateStr}_${Date.now()}.jpg`
-      
-      const { data: uploadData, error: uploadErr } = await supabase
+      let publicUrl = ''
+
+      // 1. Intento 1: Bucket principal 'worktrack-evidences'
+      let { data: uploadData, error: uploadErr } = await supabase
         .storage
-        .from('evidencias')
+        .from('worktrack-evidences')
         .upload(fileName, file, { contentType: 'image/jpeg', upsert: true })
 
-      if (uploadErr) throw uploadErr
+      if (!uploadErr && uploadData) {
+        publicUrl = supabase.storage.from('worktrack-evidences').getPublicUrl(fileName).data.publicUrl
+      } else {
+        // 2. Intento 2: Bucket alternativo 'evidencias'
+        const { data: fallbackData, error: fallbackErr } = await supabase
+          .storage
+          .from('evidencias')
+          .upload(fileName, file, { contentType: 'image/jpeg', upsert: true })
 
-      const { data: { publicUrl } } = supabase.storage.from('evidencias').getPublicUrl(fileName)
+        if (!fallbackErr && fallbackData) {
+          publicUrl = supabase.storage.from('evidencias').getPublicUrl(fileName).data.publicUrl
+        } else {
+          // 3. Intento 3: Respaldo Base64 DataURL (Asegura que NUNCA falle la foto si no existe el bucket en Supabase)
+          const reader = new FileReader()
+          publicUrl = await new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(file)
+          })
+        }
+      }
 
-      // Save as workday_activity
+      // Guardar registro de actividad con evidencia fotográfica
       const { error: dbErr } = await supabase.from('workday_activities').insert({
         employee_id: employee.id_empleado,
         date: dateStr,
