@@ -19,13 +19,15 @@ import { useI18n } from '@/lib/i18n'
 import { useImpersonation } from '@/context/ImpersonationContext'
 import { supabase } from '@/utils/supabase/client'
 import { cn } from '@/utils/cn'
-
 import { BuilderAvatarAnimation } from '@/components/BuilderAvatarAnimation'
 
 export function AIAssistantWidget() {
   const pathname = usePathname()
   const { t, language } = useI18n()
   const { impersonatedEmployee } = useImpersonation()
+
+  // EXCLUSIVE WORKER ROUTE CHECK: Only show on /mi-trabajo or when impersonating a worker!
+  const isWorkerRoute = pathname === '/mi-trabajo' || Boolean(impersonatedEmployee)
   
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
@@ -36,14 +38,17 @@ export function AIAssistantWidget() {
 
   // Automatically show initial smart notification speech bubble after 3 seconds
   useEffect(() => {
+    if (!isWorkerRoute) return
     const timer = setTimeout(() => {
       setHasPrompted(true)
     }, 3000)
     return () => clearTimeout(timer)
-  }, [])
+  }, [isWorkerRoute])
 
   // Fetch current worker events for smart advice
   useEffect(() => {
+    if (!isWorkerRoute) return
+
     async function loadWorkerContext() {
       try {
         let empId: string | null = null
@@ -87,7 +92,10 @@ export function AIAssistantWidget() {
     }
 
     loadWorkerContext()
-  }, [pathname, impersonatedEmployee])
+  }, [pathname, impersonatedEmployee, isWorkerRoute])
+
+  // If NOT on worker page (/mi-trabajo) and NOT impersonating, DO NOT RENDER!
+  if (!isWorkerRoute) return null
 
   // Determine current workday step & elapsed hours
   const entradaEv = employeeEvents.find(e => e.event_type === 'ENTRADA' || e.event_type === 'CHECK_IN')
@@ -197,6 +205,21 @@ export function AIAssistantWidget() {
               <button
                 onClick={() => setActiveAdvice(
                   language === 'es'
+                    ? `🤖 ESTATUS ACTUAL DE TU JORNADA:\n${currentStepMessage}`
+                    : `🤖 YOUR CURRENT WORKDAY STATUS:\n${currentStepMessage}`
+                )}
+                className="w-full text-left p-2.5 rounded-xl glass hover:border-amber-400/40 text-xs font-bold text-amber-400 transition-all flex items-center justify-between group border border-amber-400/20"
+              >
+                <span className="flex items-center gap-2">
+                  <HelpCircle className="w-4 h-4 text-amber-400" />
+                  ¿En qué paso voy hoy?
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-1 transition-transform" />
+              </button>
+
+              <button
+                onClick={() => setActiveAdvice(
+                  language === 'es'
                     ? '💡 CONSEJO DE ENTRADA: Registra tu Entrada tan pronto llegues a la obra o proyecto. El sistema guarda la hora oficial para la prenómina.'
                     : '💡 CLOCK-IN TIP: Record your Entrance as soon as you arrive at the work site. The system logs official times for payroll.'
                 )}
@@ -244,7 +267,7 @@ export function AIAssistantWidget() {
           {/* Answer Box */}
           {activeAdvice && (
             <div className="p-3.5 rounded-2xl bg-indigo-600/10 border border-indigo-500/30 text-xs font-semibold text-[var(--text-main)] animate-in fade-in space-y-2">
-              <p className="leading-relaxed">{activeAdvice}</p>
+              <p className="leading-relaxed whitespace-pre-wrap">{activeAdvice}</p>
               <button
                 onClick={() => setActiveAdvice('')}
                 className="text-[10px] font-black text-indigo-400 uppercase tracking-wider hover:underline"
@@ -256,7 +279,7 @@ export function AIAssistantWidget() {
 
           {/* Footer note */}
           <div className="pt-2 border-t border-[var(--border-color)] flex items-center justify-between text-[9px] text-[var(--text-muted)] font-bold">
-            <span>Worktrack AI • Siempre disponible</span>
+            <span>Worktrack AI • Exclusivo Trabajadores</span>
             <button onClick={() => setIsOpen(false)} className="hover:text-[var(--text-main)]">
               Minimizar 🔽
             </button>
