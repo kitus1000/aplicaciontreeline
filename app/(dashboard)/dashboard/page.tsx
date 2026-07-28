@@ -104,10 +104,10 @@ export default function KPIDashboardPage() {
         .select('employee_id, date, storage_url')
         .not('storage_url', 'is', null)
 
-      // 6. Fetch All Historic Events to detect Last Activity / Inactivity
+      // 6. Fetch All Historic Events to detect Last Activity / Inactivity & Punctuality
       const { data: historicEvents } = await supabase
         .from('workday_events')
-        .select('employee_id, date, event_time')
+        .select('employee_id, date, event_time, estatus_puntualidad')
         .order('event_time', { ascending: false })
 
       // Map Last Activity per Employee
