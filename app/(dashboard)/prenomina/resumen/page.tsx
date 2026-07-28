@@ -141,7 +141,7 @@ export default function PayrollSummaryPage() {
       doc.setFont('helvetica', 'normal')
       doc.text(`ID / ${t('pay_scheme')}:`, col3, contentY)
       doc.setFont('helvetica', 'bold')
-      doc.text(`#${emp.id_empleado} / ${emp.rule?.toUpperCase() || '--'}`, col3, contentY + 5)
+      doc.text(`#${emp.numero_empleado || emp.id_empleado} / ${emp.rule?.toUpperCase() || '--'}`, col3, contentY + 5)
 
       // ─── ATTENDANCE TABLE ───────────────────────────────────────────────
       y = 90
@@ -262,7 +262,7 @@ export default function PayrollSummaryPage() {
   async function fetchData() {
     setLoading(true)
     try {
-      const { data: emps } = await supabase.from('empleados').select('id_empleado, nombre, apellido_paterno, apellido_materno').eq('estado_empleado', 'Activo')
+      const { data: emps } = await supabase.from('empleados').select('id_empleado, numero_empleado, nombre, apellido_paterno, apellido_materno').eq('estado_empleado', 'Activo')
       const { data: rawRules } = await supabase.from('employee_pay_rules').select('*')
       const rules = rawRules?.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) || []
       const globalRule = rules.find((r: any) => r.scope_type === 'global' && r.active)
@@ -468,7 +468,7 @@ export default function PayrollSummaryPage() {
     payrollData.forEach((p, idx) => {
       totalPayroll += p.total;
       const row = worksheet.addRow([
-        `#${p.id_empleado}`,
+        `#${p.numero_empleado || p.id_empleado}`,
         `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim(),
         p.rule?.toUpperCase() || 'DÍA',
         p.totalHours,
@@ -635,7 +635,7 @@ export default function PayrollSummaryPage() {
                 </tr>
               ) : payrollData.map((p, idx) => (
                 <tr key={idx} className="hover:bg-white/[0.02] transition-colors group">
-                  <td className="px-6 py-5 text-xs font-black text-slate-500 tabular-nums">#{p.id_empleado}</td>
+                  <td className="px-6 py-5 text-xs font-black text-slate-500 tabular-nums">#{p.numero_empleado || p.id_empleado}</td>
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-[10px] font-black">
