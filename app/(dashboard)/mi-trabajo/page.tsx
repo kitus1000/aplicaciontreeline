@@ -73,6 +73,22 @@ export default function MiTrabajoProPage() {
 
   useEffect(() => {
     fetchData()
+
+    // Realtime subscription for instant live updates on phone
+    const channel1 = supabase
+      .channel('realtime-worker-approval')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'workday_approval_status' }, () => fetchData())
+      .subscribe()
+
+    const channel2 = supabase
+      .channel('realtime-worker-events')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'workday_events' }, () => fetchData())
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel1)
+      supabase.removeChannel(channel2)
+    }
   }, [currentWeek, selectedDate, impersonatedEmployee])
 
   async function fetchData() {
@@ -130,31 +146,49 @@ export default function MiTrabajoProPage() {
       // Fetch active permission for selected date (multi-source check)
       let activePerm: any = null
 
-      const { data: permEv } = await supabase
-        .from('workday_events')
+      // 1. Check workday_approval_status (PRIMARY & ALWAYS PRESENT)
+      const { data: statusPerm } = await supabase
+        .from('workday_approval_status')
         .select('*')
         .eq('employee_id', empData.id_empleado)
         .eq('date', dateStr)
-        .ilike('event_type', 'PERMISO_%')
+        .ilike('comments', '%PERMISO%')
         .maybeSingle()
 
-      if (permEv) {
+      if (statusPerm) {
         activePerm = {
-          tipo_permiso: permEv.event_type,
-          motivo: 'Permiso Autorizado por Administración'
+          tipo_permiso: statusPerm.comments?.includes('Con Sueldo') ? 'PERMISO_CON_SUELDO' : 'PERMISO_SIN_SUELDO',
+          motivo: statusPerm.comments || 'Permiso Autorizado por Administración'
         }
       } else {
-        try {
-          const { data: pData } = await supabase
-            .from('permisos_autorizados')
-            .select('*')
-            .eq('id_empleado', empData.id_empleado)
-            .lte('fecha_inicio', dateStr)
-            .gte('fecha_fin', dateStr)
-            .maybeSingle()
-          if (pData) activePerm = pData
-        } catch (e) {
-          // Table optional
+        // 2. Check workday_events
+        const { data: permEv } = await supabase
+          .from('workday_events')
+          .select('*')
+          .eq('employee_id', empData.id_empleado)
+          .eq('date', dateStr)
+          .ilike('event_type', 'PERMISO_%')
+          .maybeSingle()
+
+        if (permEv) {
+          activePerm = {
+            tipo_permiso: permEv.event_type,
+            motivo: 'Permiso Autorizado por Administración'
+          }
+        } else {
+          // 3. Check permisos_autorizados
+          try {
+            const { data: pData } = await supabase
+              .from('permisos_autorizados')
+              .select('*')
+              .eq('id_empleado', empData.id_empleado)
+              .lte('fecha_inicio', dateStr)
+              .gte('fecha_fin', dateStr)
+              .maybeSingle()
+            if (pData) activePerm = pData
+          } catch (e) {
+            // Optional table
+          }
         }
       }
 
