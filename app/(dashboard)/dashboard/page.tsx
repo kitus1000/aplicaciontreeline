@@ -88,7 +88,7 @@ export default function KPIDashboardPage() {
 
       const empList = employees || []
 
-      // 3. Fetch Today's Workday Events (tabla principal que usa el kiosko y app móvil)
+      // 3. Fetch Today's Workday Events (TABLA PRINCIPAL - kiosko y app móvil guardan aquí)
       const { data: eventsToday, error: eventsError } = await supabase
         .from('workday_events')
         .select('*')
@@ -96,55 +96,28 @@ export default function KPIDashboardPage() {
 
       if (eventsError) console.error('workday_events error:', eventsError)
       console.log(`workday_events HOY (${selectedDate}):`, eventsToday?.length ?? 0, 'registros')
-      if (eventsToday && eventsToday.length > 0) {
-        console.log('Tipos encontrados:', [...new Set(eventsToday.map((e: any) => e.event_type))].join(', '))
-        console.log('IDs de empleados:', [...new Set(eventsToday.map((e: any) => e.employee_id))].join(', '))
-      }
 
-      // 4. Fetch Today's Legacy Checadas (tabla vieja - puede estar vacía para fechas recientes)
-      const { data: checadasToday, error: checadasError } = await supabase
-        .from('checadas')
-        .select('*')
-        .eq('fecha_local', selectedDate)
-
-      if (checadasError) console.error('checadas error:', checadasError)
-      console.log(`checadas HOY (${selectedDate}):`, checadasToday?.length ?? 0, 'registros')
-
-      // 5. Fetch Today's Permissions / Approvals
+      // 4. Fetch Today's Permissions / Approvals
       const { data: approvalsToday } = await supabase
         .from('workday_approval_status')
         .select('*')
         .eq('date', selectedDate)
 
-      // 6. Safe Fetch Permisos Autorizados
-      let permisosToday: any[] = []
-      try {
-        const { data: pData } = await supabase
-          .from('permisos_autorizados')
-          .select('*')
-          .lte('fecha_inicio', selectedDate)
-          .gte('fecha_fin', selectedDate)
-        if (pData) permisosToday = pData
-      } catch (e) {}
-
-      // 7. Fetch Photo Evidence Activities (All time & today)
+      // 5. Fetch Photo Evidence Activities (All time)
       const { data: photoActs } = await supabase
         .from('workday_activities')
         .select('employee_id, date, storage_url')
         .not('storage_url', 'is', null)
 
-      // 8. Fetch Historic Events & Checadas for Inactivity & Punctuality
+      // 6. Fetch Historic Events for Inactivity & Punctuality
+      // NOTA: workday_events NO tiene columna estatus_puntualidad
       const { data: historicEvents } = await supabase
         .from('workday_events')
-        .select('employee_id, date, event_time, estatus_puntualidad')
+        .select('employee_id, date, event_time, event_type')
         .order('event_time', { ascending: false })
+        .limit(500)
 
-      const { data: historicChecadas } = await supabase
-        .from('checadas')
-        .select('id_empleado, id_empleado_token, fecha_local, timestamp_checada, estatus_puntualidad')
-        .order('timestamp_checada', { ascending: false })
-
-      // Map Last Activity per Employee across all tables
+      // Map Last Activity per Employee
       const lastActivityMap: Record<string, { lastDate: string; lastIso: string }> = {}
       
       historicEvents?.forEach(ev => {
@@ -156,21 +129,10 @@ export default function KPIDashboardPage() {
         }
       })
 
-      historicChecadas?.forEach(ch => {
-        const empId = ch.id_empleado || ch.id_empleado_token
-        if (empId) {
-          const key = String(empId).toLowerCase()
-          const dateStr = ch.fecha_local || ch.timestamp_checada?.split('T')[0] || ''
-          if (dateStr && (!lastActivityMap[key] || dateStr > lastActivityMap[key].lastDate)) {
-            lastActivityMap[key] = { lastDate: dateStr, lastIso: ch.timestamp_checada }
-          }
-        }
-      })
-
-      // BUILD WORKER STEPPERS (Entrada, Comida, Salida, Permiso per worker)
+      // BUILD WORKER STEPPERS
       // TIPOS EN workday_events (normalizados por /api/checadas):
       //   ENTRADA, SALIDA_COMER, ENTRADA_COMER, SALIDA_FINAL, SALIDA_FINAL_ALT
-      //   PERMISO_PERSONAL, REGRESO_PERMISO_PERSONAL, SALIDA_OPERACIONES, REGRESO_OPERACIONES
+      //   PERMISO_PERSONAL, SALIDA_OPERACIONES, REGRESO_OPERACIONES
       let countEnJornada = 0
       let countEnComida = 0
       let countConSalida = 0
@@ -182,48 +144,32 @@ export default function KPIDashboardPage() {
           if (!idToCheck) return false
           return String(idToCheck).toLowerCase() === String(emp.id_empleado).toLowerCase()
         }
-        // Match por numero_empleado - usado en checadas legacy
-        const matchEmpNum = (idToCheck: any) => {
-          if (!idToCheck) return false
-          return String(idToCheck).toLowerCase() === String(emp.numero_empleado).toLowerCase()
-        }
-        const matchEmp = (idToCheck: any) => matchEmpUUID(idToCheck) || matchEmpNum(idToCheck)
 
-        // Eventos de workday_events (principal - kiosko y app móvil)
-        const empWorkdayEvs = eventsToday?.filter(e => matchEmpUUID(e.employee_id)) || []
-        // Checadas legacy (por si acaso)
-        const empLegacyChecadas = checadasToday?.filter(c => matchEmp(c.id_empleado) || matchEmpNum(c.id_empleado_token)) || []
+        // Eventos del empleado hoy en workday_events
+        const empEvs = eventsToday?.filter(e => matchEmpUUID(e.employee_id)) || []
         const empApproval = approvalsToday?.find(a => matchEmpUUID(a.employee_id))
-        const empPermisoAut = permisosToday?.find(p => matchEmpUUID(p.id_empleado))
 
-        // Helper: buscar evento por tipo (workday_events primero, luego checadas legacy)
-        const getEventTime = (weTypes: string[], legacyTypes: string[]) => {
-          const weMatch = empWorkdayEvs.find(e => weTypes.includes(e.event_type))
-          if (weMatch) return { event_time: weMatch.event_time, source: 'workday_events', type: weMatch.event_type }
-          const legMatch = empLegacyChecadas.find(c => legacyTypes.includes(c.tipo_checada))
-          if (legMatch) return { event_time: legMatch.timestamp_checada || legMatch.hora_entrada, source: 'checadas', type: legMatch.tipo_checada }
-          return null
+        // Helper: buscar primer evento por tipo
+        const getEv = (types: string[]) => {
+          const match = empEvs.find(e => types.includes(e.event_type))
+          return match ? { event_time: match.event_time, type: match.event_type } : null
         }
 
-        // ENTRADA: tipo 'ENTRADA' en ambas tablas
-        const entradaEv = getEventTime(['ENTRADA'], ['ENTRADA', 'ENTRADA_SALIDA'])
+        // ENTRADA
+        const entradaEv = getEv(['ENTRADA'])
+        // SALIDA A COMER: API normaliza COMIDA_SALIDA -> SALIDA_COMER
+        const salidaComerEv = getEv(['SALIDA_COMER'])
+        // REGRESO DE COMER: API normaliza COMIDA_REGRESO -> ENTRADA_COMER
+        const regresoComerEv = getEv(['ENTRADA_COMER'])
+        // SALIDA FINAL: API normaliza SALIDA -> SALIDA_FINAL
+        const salidaEv = getEv(['SALIDA_FINAL', 'SALIDA_FINAL_ALT', 'SALIDA'])
 
-        // SALIDA A COMER: API guarda 'SALIDA_COMER' (normalizado desde COMIDA_SALIDA)
-        const salidaComerEv = getEventTime(['SALIDA_COMER'], ['SALIDA_COMER', 'COMIDA_SALIDA'])
-
-        // REGRESO DE COMER: API guarda 'ENTRADA_COMER' (normalizado desde COMIDA_REGRESO)
-        // IMPORTANTE: NO es 'REGRESO_COMER', es 'ENTRADA_COMER'
-        const regresoComerEv = getEventTime(['ENTRADA_COMER'], ['ENTRADA_COMER', 'COMIDA_REGRESO', 'REGRESO_COMER'])
-
-        // SALIDA FINAL: API guarda 'SALIDA_FINAL' o 'SALIDA_FINAL_ALT' (normalizado desde SALIDA)
-        const salidaEv = getEventTime(['SALIDA_FINAL', 'SALIDA_FINAL_ALT', 'SALIDA'], ['SALIDA', 'SALIDA_FINAL', 'ENTRADA_SALIDA'])
-
-        // PERMISO: cualquier evento de permiso
-        const isPermiso = !!empPermisoAut || 
+        // PERMISO
+        const isPermiso = 
           empApproval?.status === 'PERMISO_CON_SUELDO' ||
           empApproval?.status === 'PERMISO_SIN_SUELDO' ||
           empApproval?.comments?.toLowerCase().includes('permiso') ||
-          empWorkdayEvs.some(e => ['PERMISO_CON_SUELDO', 'PERMISO_SIN_SUELDO', 'PERMISO_PERSONAL'].includes(e.event_type || ''))
+          empEvs.some(e => ['PERMISO_CON_SUELDO', 'PERMISO_SIN_SUELDO', 'PERMISO_PERSONAL'].includes(e.event_type || ''))
 
         if (isPermiso) countPermisos++
         else if (salidaEv) countConSalida++
@@ -237,15 +183,14 @@ export default function KPIDashboardPage() {
           regresoComerEv,
           salidaEv,
           isPermiso,
-          permisoTipo: (empApproval?.status === 'PERMISO_CON_SUELDO' || empApproval?.comments?.includes('Con Sueldo') || empPermisoAut?.tipo_permiso === 'PERMISO_CON_SUELDO') ? 'CON_SUELDO' : 'SIN_SUELDO',
-          motivoPermiso: empApproval?.comments || empPermisoAut?.motivo || 'Permiso Autorizado',
-          allEventsToday: empWorkdayEvs // para depuración
+          permisoTipo: (empApproval?.status === 'PERMISO_CON_SUELDO' || empApproval?.comments?.includes('Con Sueldo')) ? 'CON_SUELDO' : 'SIN_SUELDO',
+          motivoPermiso: empApproval?.comments || 'Permiso Autorizado'
         }
       })
 
       setWorkerSteppers(steppers)
 
-      // BUILD PHOTO RANKING ("¿Quién ha mandado más fotos?")
+      // BUILD PHOTO RANKING
       const photoCountMap: Record<string, number> = {}
       photoActs?.forEach(pa => {
         if (pa.employee_id) {
@@ -256,42 +201,36 @@ export default function KPIDashboardPage() {
 
       const pRank = empList
         .map(emp => {
-          const count = photoCountMap[String(emp.id_empleado).toLowerCase()] || 
-                        photoCountMap[String(emp.numero_empleado).toLowerCase()] || 0
-          return {
-            employee: emp,
-            totalPhotos: count
-          }
+          const count = photoCountMap[String(emp.id_empleado).toLowerCase()] || 0
+          return { employee: emp, totalPhotos: count }
         })
         .sort((a, b) => b.totalPhotos - a.totalPhotos)
 
       setPhotoRanking(pRank)
 
-      // BUILD PUNCTUALITY RANKING ("¿Quién cumple más?")
-      const punctualityMap: Record<string, { totalOnTime: number; totalEvents: number }> = {}
+      // BUILD PUNCTUALITY RANKING
+      // Basado en workday_events: contar entradas puntales vs retardos
+      // La puntualidad real se mide comparando la hora de ENTRADA con el turno
+      // Como workday_events no tiene estatus_puntualidad, usamos frecuencia de asistencia
+      const punctualityMap: Record<string, { totalDays: number; totalEvents: number }> = {}
 
-      const trackPunct = (empId: any, isPuntual: boolean) => {
-        if (!empId) return
-        const key = String(empId).toLowerCase()
-        if (!punctualityMap[key]) punctualityMap[key] = { totalOnTime: 0, totalEvents: 0 }
+      historicEvents?.forEach(ev => {
+        if (!ev.employee_id || ev.event_type !== 'ENTRADA') return
+        const key = String(ev.employee_id).toLowerCase()
+        if (!punctualityMap[key]) punctualityMap[key] = { totalDays: 0, totalEvents: 0 }
+        punctualityMap[key].totalDays++
         punctualityMap[key].totalEvents++
-        if (isPuntual) punctualityMap[key].totalOnTime++
-      }
-
-      historicEvents?.forEach(ev => trackPunct(ev.employee_id, ev.estatus_puntualidad === 'PUNTUAL' || !ev.estatus_puntualidad))
-      historicChecadas?.forEach(ch => trackPunct(ch.id_empleado || ch.id_empleado_token, ch.estatus_puntualidad === 'PUNTUAL' || !ch.estatus_puntualidad))
+      })
 
       const punctRank = empList
         .map(emp => {
-          const stats = punctualityMap[String(emp.id_empleado).toLowerCase()] || 
-                        punctualityMap[String(emp.numero_empleado).toLowerCase()] || 
-                        { totalOnTime: 0, totalEvents: 0 }
-          const score = stats.totalEvents > 0 ? Math.round((stats.totalOnTime / stats.totalEvents) * 100) : 100
+          const stats = punctualityMap[String(emp.id_empleado).toLowerCase()] || { totalDays: 0, totalEvents: 0 }
+          // Score = dias con entrada registrada (mejor indicador disponible)
           return {
             employee: emp,
-            totalOnTime: stats.totalOnTime,
+            totalOnTime: stats.totalDays,
             totalEvents: stats.totalEvents,
-            score
+            score: stats.totalDays
           }
         })
         .sort((a, b) => b.score !== a.score ? b.score - a.score : b.totalOnTime - a.totalOnTime)
