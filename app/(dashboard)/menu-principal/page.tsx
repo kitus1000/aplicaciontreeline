@@ -9,14 +9,15 @@ import {
   Files, 
   FileText, 
   Clock, 
-  TrendingUp, 
   ChevronRight,
   HardHat,
-  Construction,
-  Hammer,
-  Zap,
   Camera,
-  DollarSign
+  DollarSign,
+  Sparkles,
+  LayoutDashboard,
+  Wallet,
+  PieChart,
+  Settings
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useI18n } from '@/lib/i18n'
@@ -36,7 +37,7 @@ export default function MenuPrincipalPage() {
     
     if (!user) {
         if (typeof window !== 'undefined' && localStorage.getItem('adminBypass') === 'true') {
-            setUserName('Administrator')
+            setUserName('Administrador')
             setIsHR(true)
         }
         return
@@ -69,18 +70,27 @@ export default function MenuPrincipalPage() {
       name: t('menu_my_work_today'), 
       href: '/mi-trabajo', 
       icon: Activity, 
-      desc: 'Clock-in, activities & weekly status.',
+      desc: t('desc_my_work'),
       color: 'from-emerald-500 to-teal-600',
-      shadow: 'shadow-emerald-500/20',
+      badge: 'Operativo',
       show: true
     },
     { 
-      name: 'Mis Actividades', 
+      name: t('menu_my_activities'), 
       href: '/mi-trabajo?tab=actividades', 
       icon: FileText, 
-      desc: 'Ver, editar o borrar registros del día.',
+      desc: t('desc_my_activities'),
       color: 'from-violet-500 to-purple-600',
-      shadow: 'shadow-violet-500/20',
+      badge: 'Bitácora',
+      show: true
+    },
+    {
+      name: t('menu_dashboard'),
+      href: '/dashboard',
+      icon: LayoutDashboard,
+      desc: t('desc_dashboard'),
+      color: 'from-indigo-500 to-blue-600',
+      badge: 'Analítica',
       show: true
     },
     ...(isHR ? [
@@ -88,154 +98,178 @@ export default function MenuPrincipalPage() {
         name: t('menu_employees'), 
         href: '/empleados', 
         icon: Users, 
-        desc: 'Manage global workforce & profiles.',
+        desc: t('desc_employees'),
         color: 'from-blue-500 to-indigo-600',
-        shadow: 'shadow-blue-500/20',
+        badge: 'Talento',
         show: true
       },
       { 
         name: t('menu_authorizations'), 
         href: '/autorizaciones/jornadas', 
         icon: Shield, 
-        desc: 'Review and approve session assets.',
-        color: 'from-orange-500 to-red-600',
-        shadow: 'shadow-orange-500/20',
+        desc: t('desc_authorizations'),
+        color: 'from-amber-500 to-orange-600',
+        badge: 'Aprobaciones',
         show: true
       },
       { 
-        name: t('menu_payroll'), 
+        name: t('menu_prepayroll'), 
         href: '/prenomina/resumen', 
         icon: Files, 
-        desc: 'Intelligence summary and earnings flow.',
+        desc: t('desc_prepayroll'),
         color: 'from-indigo-500 to-purple-600',
-        shadow: 'shadow-indigo-500/20',
+        badge: 'Nómina',
         show: true
       },
       { 
         name: t('menu_receipts'), 
         href: '/prenomina/recibos', 
         icon: FileText, 
-        desc: 'Access payment receipts and tax docs.',
+        desc: t('desc_receipts'),
         color: 'from-cyan-500 to-blue-600',
-        shadow: 'shadow-cyan-500/20',
+        badge: 'Documentos',
         show: true
       },
       { 
         name: t('menu_attendance'), 
         href: '/asistencia/dashboard', 
         icon: Clock, 
-        desc: 'Real-time monitoring of all sites.',
+        desc: t('attendance_monitor_subtitle'),
         color: 'from-amber-500 to-orange-600',
-        shadow: 'shadow-amber-500/20',
+        badge: 'Monitoreo',
         show: true
       },
       { 
-        name: t('menu_payment_rules') || 'Reglas de Pago', 
+        name: t('menu_payment_rules'), 
         href: '/configuracion/reglas-pago', 
         icon: DollarSign, 
-        desc: 'Manage salaries, hourly rates and tabulators.',
+        desc: t('pay_rules_note'),
         color: 'from-emerald-500 to-teal-600',
-        shadow: 'shadow-emerald-500/20',
-        show: isHR
+        badge: 'Tarifas',
+        show: true
       },
       { 
         name: `${t('gallery')} ${t('evidences')}`, 
         href: '/evidencias', 
         icon: Camera, 
-        desc: t('visual_monitoring') || 'Revisión visual de capturas de trabajo.',
+        desc: t('photo_records'),
         color: 'from-pink-500 to-rose-600',
-        shadow: 'shadow-pink-500/20',
+        badge: 'Evidencias',
+        show: true
+      },
+      { 
+        name: t('menu_registradora'), 
+        href: '/finanzas/registradora', 
+        icon: Wallet, 
+        desc: t('desc_registradora'),
+        color: 'from-emerald-600 to-green-700',
+        badge: 'Finanzas',
+        show: true
+      },
+      { 
+        name: t('menu_business_center'), 
+        href: '/finanzas/centro-negocios', 
+        icon: PieChart, 
+        desc: t('desc_business_center'),
+        color: 'from-blue-600 to-indigo-700',
+        badge: 'Proyectos',
         show: true
       }
     ] : [])
   ]
 
   return (
-    <div className="relative min-h-[calc(100vh-4rem)] p-8 overflow-hidden page-transition">
-      {/* Background Grid */}
-      <div className="absolute inset-0 construction-grid opacity-30 pointer-events-none"></div>
+    <div className="relative min-h-[calc(100vh-4rem)] p-4 md:p-8 space-y-8 page-transition">
       
-      {/* Decorative Assets */}
-      <div className="absolute top-20 right-20 w-96 h-96 bg-indigo-600/10 blur-[100px] rounded-full"></div>
-      <div className="absolute bottom-20 left-20 w-96 h-96 bg-emerald-600/10 blur-[100px] rounded-full"></div>
-
-      <div className="relative z-10 max-w-7xl mx-auto space-y-12">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-12">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-               <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] rounded-full border border-indigo-500/20">System Online</span>
-               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+      {/* Executive Welcome Banner */}
+      <div className="rounded-3xl glass-card p-6 md:p-10 relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border border-[var(--border-color)]">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="space-y-3 z-10">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-[0.25em] rounded-full border border-indigo-500/20 flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 animate-pulse" /> {t('executive_suite')}
+            </span>
+            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+              <span>System Online</span>
             </div>
-            <h1 className="text-6xl font-black text-white tracking-tighter italic uppercase leading-tight">
-              Welcome, <span className="text-indigo-400">{userName}</span>
-            </h1>
-            <p className="text-slate-500 text-sm font-bold uppercase tracking-[0.4em] max-w-lg leading-relaxed">
-              Main Access Point <br />
-              <span className="text-slate-600">Select an intelligence module</span>
-            </p>
           </div>
-        </header>
 
-        {/* Floating Icons Actions Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {actions.map((action, idx) => (
-            <Link 
-              key={action.href} 
-              href={action.href}
-              className={cn(
-                "group relative float-btn glass-dark p-8 rounded-[2.5rem] border border-white/5 flex flex-col justify-between min-h-[280px] overflow-hidden animate-in fade-in slide-in-from-bottom-8",
-                action.shadow
-              )}
-              style={{ animationDelay: `${idx * 100}ms` }}
-            >
-              {/* Card Decoration */}
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-[var(--text-main)] tracking-tight">
+            {t('executive_welcome')}, <span className="text-indigo-500">{userName || 'Ejecutivo'}</span>
+          </h1>
+
+          <p className="text-xs sm:text-sm font-semibold text-[var(--text-muted)] max-w-xl">
+            {t('executive_subtitle')}
+          </p>
+        </div>
+
+        <div className="z-10 flex items-center gap-3">
+          <Link
+            href="/perfil"
+            className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider transition-all float-btn shadow-lg shadow-indigo-600/20"
+          >
+            {t('menu_profile')} 👤
+          </Link>
+        </div>
+      </div>
+
+      {/* Grid of Executive Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {actions.map((action, idx) => (
+          <Link 
+            key={action.href} 
+            href={action.href}
+            className="group relative float-btn glass-card p-6 md:p-8 rounded-3xl border border-[var(--border-color)] flex flex-col justify-between min-h-[240px] overflow-hidden transition-all hover:border-indigo-500/40"
+            style={{ animationDelay: `${idx * 60}ms` }}
+          >
+            <div className="flex items-start justify-between mb-6">
               <div className={cn(
-                "absolute -top-12 -right-12 w-32 h-32 blur-[40px] opacity-20 group-hover:opacity-40 transition-opacity rounded-full bg-gradient-to-br",
+                "w-14 h-14 rounded-2xl flex items-center justify-center border border-white/20 shadow-xl bg-gradient-to-br transition-transform group-hover:scale-110",
                 action.color
-              )}></div>
-              
-              <div className="relative z-10">
-                <div className={cn(
-                  "w-16 h-16 rounded-2xl flex items-center justify-center mb-8 border border-white/10 shadow-2xl transition-transform group-hover:scale-110 group-hover:-rotate-6 bg-gradient-to-br",
-                  action.color
-                )}>
-                  <action.icon className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-2xl font-black text-white tracking-tight uppercase italic mb-3">
-                  {action.name}
-                </h3>
-                <p className="text-slate-500 text-xs font-bold leading-relaxed max-w-[200px] uppercase tracking-widest opacity-60 group-hover:opacity-100 transition-opacity">
-                  {action.desc}
-                </p>
+              )}>
+                <action.icon className="w-7 h-7 text-white" />
               </div>
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-500/10 text-[var(--text-muted)] border border-[var(--border-color)]">
+                {action.badge}
+              </span>
+            </div>
 
-              <div className="relative z-10 flex items-center justify-between mt-8 pt-6 border-t border-white/5">
-                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] group-hover:translate-x-2 transition-transform">Access Terminal</span>
-                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white group-hover:text-slate-950 transition-all duration-500 -rotate-45 group-hover:rotate-0">
-                  <ChevronRight className="w-5 h-5" />
-                </div>
-              </div>
+            <div className="space-y-2 relative z-10">
+              <h3 className="text-xl font-black text-[var(--text-main)] tracking-tight group-hover:text-indigo-400 transition-colors">
+                {action.name}
+              </h3>
+              <p className="text-xs font-semibold text-[var(--text-muted)] line-clamp-2 leading-relaxed">
+                {action.desc}
+              </p>
+            </div>
 
-              {/* Scanline Effect on Hover */}
-              <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-10 transition-opacity">
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white to-transparent h-[100px] animate-[futuristic-scan_2s_infinite]"></div>
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-[var(--border-color)] relative z-10">
+              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest group-hover:translate-x-1 transition-transform">
+                Acceder →
+              </span>
+              <div className="w-8 h-8 rounded-full glass flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                <ChevronRight className="w-4 h-4" />
               </div>
-            </Link>
-          ))}
-          
-          {/* Decorative Card */}
-          <div className="glass-dark p-8 rounded-[2.5rem] border border-white/5 flex flex-col justify-center items-center text-center space-y-6 relative overflow-hidden group">
-             <div className="absolute inset-0 bg-indigo-600/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-             <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700 animate-pulse">
-                <HardHat className="w-10 h-10 text-slate-500" />
-             </div>
-             <div>
-                <h3 className="text-lg font-black text-white uppercase italic tracking-tighter">Construction PRO</h3>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-2">Next Gen Site Management</p>
-             </div>
+            </div>
+          </Link>
+        ))}
+
+        {/* Decorative Construction Badge Card */}
+        <div className="glass-card p-6 md:p-8 rounded-3xl border border-[var(--border-color)] flex flex-col justify-center items-center text-center space-y-4 relative overflow-hidden">
+          <div className="w-16 h-16 bg-indigo-500/10 rounded-2xl flex items-center justify-center border border-indigo-500/20 animate-pulse">
+            <HardHat className="w-8 h-8 text-indigo-500" />
+          </div>
+          <div>
+            <h3 className="text-base font-black text-[var(--text-main)] uppercase tracking-tight">Worktrack Suite PRO</h3>
+            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">
+              Optimizado para PC y Celulares v3.0
+            </p>
           </div>
         </div>
       </div>
+
     </div>
   )
 }

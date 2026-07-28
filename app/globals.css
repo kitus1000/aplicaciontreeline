@@ -1,212 +1,240 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-primary: #0b0f19;
+  --bg-surface: rgba(15, 23, 42, 0.75);
+  --bg-card: rgba(15, 23, 42, 0.85);
+  --bg-input: #111827;
+  --border-color: rgba(99, 102, 241, 0.2);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-accent: #818cf8;
+  --input-bg: #1e293b;
+  --input-text: #f8fafc;
+  --input-placeholder: #64748b;
+  --input-border: rgba(99, 102, 241, 0.3);
+  --card-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+  --accent-glow: rgba(99, 102, 241, 0.4);
+  --neon-cyan: #06b6d4;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html.light {
+  --bg-primary: #f8fafc;
+  --bg-surface: rgba(255, 255, 255, 0.9);
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --border-color: rgba(203, 213, 225, 0.8);
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --text-accent: #4f46e5;
+  --input-bg: #ffffff;
+  --input-text: #0f172a;
+  --input-placeholder: #64748b;
+  --input-border: #cbd5e1;
+  --card-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.08);
+  --accent-glow: rgba(79, 70, 229, 0.2);
+  --neon-cyan: #0284c7;
 }
 
 body {
-  background: #0f172a; /* Slate 900 */
-  color: #f8fafc;
-  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow-x: hidden;
+  transition: background-color 0.4s ease, color 0.4s ease;
 }
 
 @layer utilities {
   .glass {
-    @apply bg-white/10 backdrop-blur-md border border-white/10;
+    background: var(--bg-surface);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+  }
+  .glass-card {
+    background-color: var(--bg-card);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--card-shadow);
   }
   .glass-dark {
-    @apply bg-slate-900/60 backdrop-blur-xl border border-white/5;
+    background-color: var(--bg-card);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-right: 1px solid var(--border-color);
   }
+  
+  /* Futuristic Tech Cards & Effects */
+  .cyber-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--card-shadow);
+    position: relative;
+    overflow: hidden;
+  }
+  .cyber-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--text-accent), var(--neon-cyan), transparent);
+  }
+  
   .neon-border {
-    @apply border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.3)];
+    border: 1px solid var(--text-accent);
+    box-shadow: 0 0 15px var(--accent-glow);
   }
+  
+  .futuristic-glow {
+    position: relative;
+  }
+  .futuristic-glow::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    background: linear-gradient(45deg, #6366f1, #06b6d4, #3b82f6);
+    border-radius: inherit;
+    z-index: -1;
+    opacity: 0.15;
+    transition: opacity 0.3s ease;
+  }
+  .futuristic-glow:hover::after {
+    opacity: 0.4;
+  }
+
+  .hud-line {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+  }
+
   .page-transition {
-    animation: fadeIn 0.7s ease-out;
+    animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  /* Floating Button Effect */
   .float-btn {
-    @apply transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(99,102,241,0.5)] active:scale-95;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  /* Form Pop Effect */
-  .form-pop {
-    @apply bg-slate-800/40 border border-slate-700 focus:border-indigo-500 focus:bg-slate-800/60 transition-all shadow-inner;
+  .float-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px -10px var(--accent-glow);
+  }
+  .float-btn:active {
+    transform: scale(0.97);
   }
 }
 
-/* Construction Grid Background */
+/* Futuristic Tech Grid Background */
 .construction-grid {
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size: 50px 50px;
-  mask-image: radial-gradient(circle at center, black, transparent 80%);
-  animation: grid-drift 20s linear infinite;
+    linear-gradient(to right, rgba(99, 102, 241, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 90%);
 }
 
-@keyframes grid-drift {
-  from { background-position: 0 0; }
-  to { background-position: 50px 50px; }
-}
-
-/* Futuristic Loader Animation */
-@keyframes futuristic-scan {
-  0% { transform: translateY(-100%); opacity: 0; }
-  50% { opacity: 0.5; }
-  100% { transform: translateY(300%); opacity: 0; }
-}
-
-@keyframes pulse-neon {
-  0%, 100% { box-shadow: 0 0 10px rgba(79, 70, 229, 0.4), 0 0 20px rgba(79, 70, 229, 0.2); }
-  50% { box-shadow: 0 0 20px rgba(79, 70, 229, 0.6), 0 0 40px rgba(79, 70, 229, 0.3); }
-}
-
-/* Glassmorphism Utilities */
-.glass {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.glass-dark {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.03);
-}
-
-.neon-border {
-  border: 1px solid rgba(99, 102, 241, 0.5);
-  animation: pulse-neon 3s infinite;
-}
-
-/* Transitions */
-.page-transition {
-  animation: fadeIn 0.5s ease-out;
+html.light .construction-grid {
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Standard Input Overrides */
-input, textarea, select {
-  outline: none;
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.6);
 }
 
-/* Ensure placeholders are visible but distinct */
-::placeholder {
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* =========================================================
+   UNIVERSAL FORM FIELD CONTRAST FIX (DARK & LIGHT MODES)
+   ========================================================= */
+
+/* Inputs, Textareas, and Selects in Dark Mode */
+html.dark input, 
+html.dark textarea, 
+html.dark select,
+body:not(.light) input,
+body:not(.light) textarea,
+body:not(.light) select {
+  background-color: var(--input-bg) !important;
+  color: #f8fafc !important;
+  border: 1px solid var(--input-border) !important;
+}
+
+html.dark input::placeholder, 
+html.dark textarea::placeholder,
+body:not(.light) input::placeholder,
+body:not(.light) textarea::placeholder {
   color: #94a3b8 !important;
   opacity: 1 !important;
 }
 
-/* =============================================
-   FORM FIELDS GLOBAL FIX
-   Inputs dentro de contenedores blancos/claros
-   siempre son legibles independientemente del tema
-   ============================================= */
+html.dark select option,
+body:not(.light) select option {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+}
 
-/* Asegura que el fondo de inputs sea blanco y texto oscuro cuando
-   su contenedor padre o él mismo tiene un fondo claro */
-.form-card input,
-.form-card textarea,
-.form-card select,
-[class~="bg-white"] input,
-[class~="bg-white"] textarea,
-[class~="bg-white"] select,
-[class~="bg-zinc-50"] input,
-[class~="bg-zinc-50"] textarea,
-[class~="bg-zinc-50"] select,
-input[class~="bg-white"],
-input[class~="bg-zinc-50"],
-input[class~="bg-blue-50"],
-input[class~="bg-amber-50"],
-input[class~="bg-red-50"],
-select[class~="bg-white"],
-select[class~="bg-zinc-50"],
-select[class~="bg-blue-50"],
-select[class~="bg-amber-50"],
-select[class~="bg-red-50"],
-textarea[class~="bg-white"],
-textarea[class~="bg-zinc-50"] {
+/* Inputs, Textareas, and Selects in Light Mode */
+html.light input, 
+html.light textarea, 
+html.light select {
   background-color: #ffffff !important;
-  color: #1a1a1a !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
 }
 
-/* =============================================
-   MÁS SELECTORES PARA TEXTO OSCURO
-   Asegurar que cualquier campo que se vea blanco tenga texto negro
-   ============================================= */
-input:not([class*="bg-[#"]), select:not([class*="bg-[#"]), textarea:not([class*="bg-[#"]) {
-  color: #1a1a1a;
-}
-
-/* Focus ring ambar para formularios claros */
-.form-card input:focus,
-.form-card textarea:focus,
-.form-card select:focus {
-  border-color: #f59e0b !important;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
-  outline: none;
-}
-
-/* Placeholder visible */
-.form-card input::placeholder,
-.form-card textarea::placeholder,
-[class~="bg-white"] input::placeholder,
-[class~="bg-white"] textarea::placeholder,
-input:not([class*="bg-[#"])::placeholder,
-textarea:not([class*="bg-[#"])::placeholder {
-  color: #9ca3af !important;
+html.light input::placeholder, 
+html.light textarea::placeholder {
+  color: #64748b !important;
   opacity: 1 !important;
 }
 
-/* Options de select en modo claro */
-.form-card select option,
-[class~="bg-white"] select option,
-[class~="bg-zinc-50"] select option {
-  background-color: #ffffff;
-  color: #1a1a1a;
+html.light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
 }
 
-/* Labels dentro de formularios blancos */
-.form-card label {
-  color: #3f3f46;
-}
-
-/* =============================================
-   INPUT-DARK: Campos para el tema oscuro del dashboard
-   ============================================= */
-.input-dark {
-  background-color: rgba(30, 41, 59, 0.8) !important;
-  color: #f1f5f9 !important;
-  border-color: rgba(255,255,255,0.1) !important;
-}
-.input-dark:focus {
+/* Global Focus Effects for Form Inputs */
+input:focus, textarea:focus, select:focus {
   border-color: #6366f1 !important;
-  box-shadow: 0 0 0 2px rgba(99,102,241,0.25);
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.4) !important;
+  outline: none !important;
 }
-.input-dark::placeholder {
-  color: #64748b !important;
+
+/* Form Labels Legibility Guarantee */
+html.dark label, body:not(.light) label {
+  color: #cbd5e1 !important;
 }
-.input-dark option {
-  background-color: #1e293b;
-  color: #f1f5f9;
+
+html.light label {
+  color: #334155 !important;
+}
+
+.input-executive {
+  border-radius: 1rem;
 }

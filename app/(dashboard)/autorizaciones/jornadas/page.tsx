@@ -2,16 +2,36 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/utils/supabase/client'
-import { Calendar, CheckCircle2, XCircle, ExternalLink, Filter, Search, ChevronRight } from 'lucide-react'
+import { 
+  Calendar, 
+  CheckCircle2, 
+  XCircle, 
+  ExternalLink, 
+  Filter, 
+  Search, 
+  ChevronRight, 
+  Bell, 
+  Eye, 
+  Sparkles,
+  ShieldAlert,
+  Check,
+  X
+} from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useI18n } from '@/lib/i18n'
+import { useImpersonation } from '@/context/ImpersonationContext'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 export default function AutorizacionesJornadasPage() {
     const { t } = useI18n()
+    const { setImpersonatedEmployee } = useImpersonation()
+    const router = useRouter()
+
     const [jornadas, setJornadas] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [filterStatus, setFilterStatus] = useState<string>('Enviado')
+    const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
 
     const statusMap: Record<string, string> = {
         'Enviado': 'status_sent',
@@ -28,12 +48,11 @@ export default function AutorizacionesJornadasPage() {
 
     async function fetchJornadas() {
         setLoading(true)
-        // Obtenemos los estados de aprobación junto con los datos del empleado
         const { data, error } = await supabase
             .from('workday_approval_status')
             .select(`
                 *,
-                empleados (nombre, apellido_paterno, apellido_materno)
+                empleados (id_empleado, numero_empleado, nombre, apellido_paterno, apellido_materno, correo_electronico)
             `)
             .eq('status', filterStatus)
             .order('date', { ascending: false })
@@ -44,39 +63,65 @@ export default function AutorizacionesJornadasPage() {
         setLoading(false)
     }
 
-    async function updateStatus(rowId: string, newStatus: string) {
-        if (!confirm(`${t('confirm')} ${t(statusMap[newStatus] || newStatus)}?`)) return
-        
+    async function updateStatus(rowId: string, newStatus: string, workerName: string) {
+        let reason = ''
+        if (newStatus === 'Rechazado') {
+          reason = prompt('Por favor especifique la nota o motivo de rechazo:') || ''
+          if (!reason) return
+        }
+
         const { error } = await supabase
             .from('workday_approval_status')
-            .update({ status: newStatus, reviewed_at: new Date().toISOString() })
+            .update({ 
+              status: newStatus, 
+              comments: reason || null,
+              reviewed_at: new Date().toISOString() 
+            })
             .eq('id', rowId)
 
-        if (error) alert('Error: ' + error.message)
-        else fetchJornadas()
+        if (error) {
+          setFeedbackMessage({ type: 'error', text: 'Error: ' + error.message })
+        } else {
+          setFeedbackMessage({ 
+            type: 'success', 
+            text: newStatus === 'Autorizado' 
+              ? `¡Jornada de ${workerName} autorizada exitosamente!` 
+              : `Jornada de ${workerName} enviada a corrección.` 
+          })
+          fetchJornadas()
+        }
+    }
+
+    const handleInspectWorkerScreen = (emp: any) => {
+      if (!emp) return
+      setImpersonatedEmployee(emp)
+      router.push('/mi-trabajo')
     }
 
     return (
         <div className="space-y-8 max-w-7xl mx-auto page-transition px-4 md:px-0">
-            {/* Cabecera Futurista */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-white/5 pb-8">
+            
+            {/* Header & Tabs */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-[var(--border-color)] pb-6">
                 <div>
-                    <h1 className="text-4xl font-black text-white tracking-tighter uppercase italic">
+                    <h1 className="text-3xl md:text-5xl font-black text-[var(--text-main)] tracking-tight">
                         {t('auth_title').split(' ')[0]} <span className="text-indigo-400">{t('auth_title').split(' ').slice(1).join(' ')}</span>
                     </h1>
-                    <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em] mt-1">{t('auth_subtitle')}</p>
+                    <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mt-1">
+                      {t('auth_subtitle')}
+                    </p>
                 </div>
 
-                <div className="flex glass p-1.5 rounded-2xl shadow-2xl overflow-x-auto whitespace-nowrap">
+                <div className="flex glass p-1.5 rounded-2xl shadow-xl overflow-x-auto whitespace-nowrap border border-[var(--border-color)]">
                     {statusOptions.map(st => (
                         <button
                             key={st}
                             onClick={() => setFilterStatus(st)}
                             className={cn(
-                                "px-5 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300",
+                                "px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-300",
                                 filterStatus === st 
-                                    ? "bg-indigo-600 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)] scale-105" 
-                                    : "text-slate-500 hover:text-white"
+                                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 scale-105" 
+                                    : "text-[var(--text-muted)] hover:text-[var(--text-main)]"
                             )}
                         >
                             {t(statusMap[st] || st)}
@@ -85,115 +130,161 @@ export default function AutorizacionesJornadasPage() {
                 </div>
             </div>
 
-            {/* Grid de Jornadas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+            {/* Closed Workday Executive Alert Banner */}
+            {filterStatus === 'Enviado' && jornadas.length > 0 && (
+              <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl animate-in fade-in">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                    <Bell className="w-6 h-6 animate-bounce" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                      <span>Alerta Ejecutiva: Días Cerrados Pendientes</span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
+                        {jornadas.length} Trabajador(es)
+                      </span>
+                    </h3>
+                    <p className="text-xs text-[var(--text-main)] font-semibold mt-0.5">
+                      Los siguientes colaboradores han cerrado su jornada diaria y solicitaron tu aprobación ejecutiva.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Notification Feedback Toast */}
+            {feedbackMessage && (
+              <div className={cn(
+                "p-4 rounded-2xl flex items-center justify-between border text-xs font-bold animate-in fade-in",
+                feedbackMessage.type === 'success' 
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" 
+                  : "bg-red-500/10 border-red-500/30 text-red-400"
+              )}>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>{feedbackMessage.text}</span>
+                </div>
+                <button onClick={() => setFeedbackMessage(null)} className="hover:opacity-75">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Grid of Workday Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {loading ? (
-                    <div className="col-span-full py-40 text-center space-y-4">
-                        <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mx-auto"></div>
-                        <p className="text-slate-500 text-xs font-black uppercase tracking-[0.5em] animate-pulse">{t('syncing_network')}</p>
+                    <div className="col-span-full py-28 text-center space-y-4">
+                        <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mx-auto"></div>
+                        <p className="text-[var(--text-muted)] text-xs font-black uppercase tracking-widest animate-pulse">{t('syncing_network')}</p>
                     </div>
                 ) : jornadas.length === 0 ? (
-                    <div className="col-span-full py-20 glass-dark rounded-3xl border border-white/5 text-center space-y-6">
-                        <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto neon-border">
-                           <Calendar className="w-10 h-10 text-slate-600" />
+                    <div className="col-span-full py-16 glass-card rounded-3xl border border-[var(--border-color)] text-center space-y-4">
+                        <div className="w-16 h-16 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto text-indigo-400">
+                           <Calendar className="w-8 h-8" />
                         </div>
                         <div>
-                           <h3 className="text-xl font-bold text-white tracking-tight uppercase italic">{t('no_pending_movements')}</h3>
-                           <p className="text-slate-500 text-xs uppercase font-bold tracking-widest mt-2 px-8 leading-relaxed max-w-md mx-auto">{t('no_workdays_status')}</p>
+                           <h3 className="text-lg font-black text-[var(--text-main)] tracking-tight">{t('no_pending_movements')}</h3>
+                           <p className="text-[var(--text-muted)] text-xs font-semibold max-w-md mx-auto mt-1">{t('no_workdays_status')}</p>
                         </div>
                     </div>
                 ) : (
                     jornadas.map(j => (
-                        <div key={j.id} className="glass-dark rounded-3xl border border-white/5 shadow-2xl relative overflow-hidden group flex flex-col hover:border-indigo-500/30 transition-all duration-500">
-                            {/* Accent line */}
-                            <div className="absolute top-0 left-0 w-full h-[2px] bg-indigo-500/20 group-hover:bg-indigo-500 transition-colors"></div>
-                            
-                            {/* Header Tarjeta */}
-                            <div className="p-6 border-b border-white/5 bg-white/2">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg ring-1 ring-white/10 group-hover:scale-110 transition-transform">
-                                            {j.empleados?.nombre.charAt(0)}{j.empleados?.apellido_paterno.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-black text-white text-lg tracking-tight leading-tight">{j.empleados?.nombre} {j.empleados?.apellido_paterno}</h4>
-                                            <div className="flex items-center gap-2 mt-1">
-                                               <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 bg-slate-800 px-2 py-0.5 rounded">{j.date}</span>
-                                               <span className="text-[10px] text-indigo-400 font-bold">#PRO</span>
-                                            </div>
+                        <div 
+                          key={j.id} 
+                          className="cyber-card rounded-3xl p-6 border border-[var(--border-color)] shadow-xl flex flex-col justify-between space-y-6 float-btn"
+                        >
+                            {/* Card Header */}
+                            <div className="flex justify-between items-start border-b border-[var(--border-color)] pb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-lg shadow-md">
+                                        {j.empleados?.nombre ? j.empleados.nombre.charAt(0) : 'E'}
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-[var(--text-main)] text-base tracking-tight leading-tight">
+                                          {j.empleados?.nombre} {j.empleados?.apellido_paterno}
+                                        </h4>
+                                        <div className="flex items-center gap-2 mt-1">
+                                           <span className="text-[10px] font-bold text-[var(--text-muted)] bg-slate-500/10 px-2 py-0.5 rounded-lg border border-[var(--border-color)]">
+                                             📅 {j.date}
+                                           </span>
+                                           <span className="text-[10px] text-indigo-400 font-bold">#{j.empleados?.numero_empleado}</span>
                                         </div>
                                     </div>
-                                    <span className={cn(
-                                        "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter border",
-                                        j.status === 'Enviado' ? 'bg-amber-500/10 text-amber-500 border-amber-500/30' :
-                                        j.status === 'Autorizado' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                                        'bg-slate-800 text-slate-400 border-slate-700'
-                                    )}>
-                                        {t(statusMap[j.status] || j.status)}
-                                    </span>
                                 </div>
+
+                                <span className={cn(
+                                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border",
+                                    j.status === 'Enviado' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+                                    j.status === 'Autorizado' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                                    'bg-slate-500/10 text-[var(--text-muted)] border-[var(--border-color)]'
+                                )}>
+                                    {t(statusMap[j.status] || j.status)}
+                                </span>
                             </div>
 
-                            {/* Contenido */}
-                            <div className="p-6 flex-1 space-y-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="flex-1 p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50 hover:bg-slate-800/50 transition-colors group/ev">
-                                        <p className="text-[10px] uppercase font-black text-slate-500 mb-2 tracking-widest">{t('evidence_step')}</p>
-                                        {j.storage_url ? (
-                                            <a 
-                                                href={j.storage_url} 
-                                                target="_blank" 
-                                                rel="noreferrer"
-                                                className="flex items-center gap-2 text-indigo-400 font-black text-xs hover:text-white transition-colors"
-                                            >
-                                                <ExternalLink className="w-4 h-4" />
-                                                {t('view_on_drive')}
-                                            </a>
-                                        ) : (
-                                            <div className="flex items-center gap-2 text-slate-600 italic text-xs font-bold">
-                                               <XCircle className="w-4 h-4" />
-                                               {t('no_files')}
-                                            </div>
-                                        )}
+                            {/* Card Content & Evidence */}
+                            <div className="space-y-4">
+                                <div className="p-4 rounded-2xl glass border border-[var(--border-color)] flex items-center justify-between">
+                                    <div>
+                                      <p className="text-[10px] uppercase font-bold text-[var(--text-muted)]">{t('evidence_step')}</p>
+                                      {j.storage_url ? (
+                                          <a 
+                                              href={j.storage_url} 
+                                              target="_blank" 
+                                              rel="noreferrer"
+                                              className="flex items-center gap-1.5 text-indigo-400 font-bold text-xs hover:underline mt-1"
+                                          >
+                                              <ExternalLink className="w-3.5 h-3.5" />
+                                              {t('view_on_drive')}
+                                          </a>
+                                      ) : (
+                                          <span className="text-xs text-[var(--text-muted)] italic">Sin fotos adjuntas</span>
+                                      )}
                                     </div>
+
+                                    {/* Inspect Screen Button */}
+                                    {j.empleados && (
+                                      <button
+                                        onClick={() => handleInspectWorkerScreen(j.empleados)}
+                                        className="px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-600 hover:text-white border border-indigo-500/20 text-indigo-400 text-xs font-bold transition-all flex items-center gap-1.5"
+                                        title="Ver la pantalla exacta de este trabajador"
+                                      >
+                                        <Eye className="w-3.5 h-3.5" />
+                                        <span>👁️ Inspeccionar</span>
+                                      </button>
+                                    )}
                                 </div>
 
                                 {j.comments && (
-                                    <div className="text-xs p-4 bg-red-500/10 text-red-400 rounded-2xl italic border border-red-500/20 relative">
-                                        <div className="absolute -top-2 left-4 px-2 bg-slate-900 border border-red-500/20 text-[9px] font-black text-red-400 uppercase">{t('notes')}</div>
-                                        "{j.comments}"
+                                    <div className="text-xs p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 italic">
+                                        <strong>Notas:</strong> "{j.comments}"
                                     </div>
                                 )}
                             </div>
 
-                            {/* Acciones Futuristas */}
-                            <div className="p-6 bg-white/2 border-t border-white/5 flex gap-3">
+                            {/* Executive Action Buttons */}
+                            <div className="pt-4 border-t border-[var(--border-color)] flex gap-2">
                                 {filterStatus === 'Enviado' || filterStatus === 'En revisión' ? (
                                     <>
                                         <button 
-                                            onClick={() => updateStatus(j.id, 'Autorizado')}
-                                            className="flex-1 bg-white text-slate-900 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-500 hover:text-white transition-all shadow-xl active:scale-95"
+                                            onClick={() => updateStatus(j.id, 'Autorizado', j.empleados?.nombre || 'Trabajador')}
+                                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5 float-btn"
                                         >
-                                            {t('authorize')}
+                                            <Check className="w-4 h-4" />
+                                            <span>Aceptar Día</span>
                                         </button>
                                         <button 
-                                            onClick={() => {
-                                                const reason = prompt(t('rejection_reason_prompt'))
-                                                if (reason) updateStatus(j.id, 'Rechazado')
-                                            }}
-                                            className="px-5 py-3 border border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-500 hover:bg-red-500/5 rounded-2xl transition-all active:scale-95"
-                                            title="Rechazar"
+                                            onClick={() => updateStatus(j.id, 'Rechazado', j.empleados?.nombre || 'Trabajador')}
+                                            className="px-4 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1"
                                         >
-                                            <XCircle className="w-5 h-5" />
+                                            <X className="w-4 h-4" />
+                                            <span>Rechazar</span>
                                         </button>
                                     </>
                                 ) : (
-                                    <button 
-                                        onClick={() => updateStatus(j.id, 'En revisión')}
-                                        className="w-full border border-slate-700 text-slate-500 py-3 rounded-2xl text-[10px] font-black hover:bg-white/5 hover:text-indigo-400 transition-all uppercase tracking-widest"
-                                    >
-                                        {t('rollback_review')}
-                                    </button>
+                                  <div className="w-full text-center text-xs font-bold text-[var(--text-muted)] py-1">
+                                    Estatus: {j.status}
+                                  </div>
                                 )}
                             </div>
                         </div>

@@ -24,7 +24,8 @@ import {
     Camera,
     DollarSign,
     Wallet,
-    PieChart
+    PieChart,
+    User
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useI18n } from '@/lib/i18n'
@@ -128,6 +129,7 @@ export function Sidebar() {
         {
             title: t('menu_group_system'),
             items: [
+                { name: t('menu_profile'), href: '/perfil', icon: User, color: 'text-indigo-400' },
                 { name: t('menu_about'), href: '/acerca-de', icon: Info, color: 'text-slate-400' },
                 ...(isAdmin ? [{ name: t('menu_settings'), href: '/configuracion', icon: Settings, color: 'text-slate-400' }] : []),
             ]
@@ -140,7 +142,7 @@ export function Sidebar() {
     return (
         <aside 
             className={cn(
-                "relative flex flex-col h-screen glass-dark border-r border-white/5 transition-all duration-500 ease-in-out z-50",
+                "hidden md:flex relative flex-col h-screen glass-dark border-r border-[var(--border-color)] transition-all duration-500 ease-in-out z-30 shrink-0",
                 isCollapsed ? "w-20" : "w-72"
             )}
         >

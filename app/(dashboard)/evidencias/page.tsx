@@ -201,18 +201,33 @@ export default function EvidenceGalleryPage() {
                <div className="flex items-center gap-4">
                  <button 
                    onClick={() => setSelectedEmployeeId(null)}
-                   className="p-3 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-colors"
+                   className="p-3 glass-card hover:bg-indigo-600 hover:text-white rounded-2xl border border-[var(--border-color)] transition-all flex items-center gap-2 text-xs font-bold text-[var(--text-main)]"
+                   title="Volver a lista de empleados"
                  >
-                   <ChevronLeft className="w-6 h-6 text-white" />
+                   <ChevronLeft className="w-5 h-5 text-indigo-400" />
+                   <span>⬅️ Volver a Galería</span>
                  </button>
-                 <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter italic uppercase leading-tight">
+                 <h1 className="text-3xl md:text-5xl font-black text-[var(--text-main)] tracking-tight">
                    Archivos de <span className="text-indigo-400">{activeEmployeeData.empleado.nombre}</span>
                  </h1>
                </div>
             ) : (
-               <h1 className="text-5xl font-black text-white tracking-tighter italic uppercase leading-tight">
-                 {t('gallery')} <span className="text-indigo-400">{t('evidences')}</span>
-               </h1>
+               <div className="space-y-2">
+                 <h1 className="text-4xl md:text-5xl font-black text-[var(--text-main)] tracking-tight">
+                   {t('gallery')} <span className="text-indigo-400">{t('evidences')}</span>
+                 </h1>
+                 {(startDate !== '2020-01-01') && (
+                   <button
+                     onClick={() => {
+                       setStartDate('2020-01-01')
+                       setEndDate(format(new Date(), 'yyyy-MM-dd'))
+                     }}
+                     className="px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-600 hover:text-white text-xs font-bold transition-all flex items-center gap-2"
+                   >
+                     <span>📅 Ver Todo el Historial (Quitar filtro de fecha) ⬅️</span>
+                   </button>
+                 )}
+               </div>
             )}
             
             <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.4em] max-w-lg leading-relaxed">

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/utils/supabase/client'
 import { useI18n } from '@/lib/i18n'
+import { useImpersonation } from '@/context/ImpersonationContext'
 import { 
   Play, 
   Coffee, 
@@ -61,25 +62,36 @@ export default function MyWorkTodayPage() {
   
   const locale = language === 'es' ? es : enUS
 
+  const { impersonatedEmployee } = useImpersonation()
+
   useEffect(() => {
     fetchData()
-  }, [currentWeek, selectedDate])
+  }, [currentWeek, selectedDate, impersonatedEmployee])
 
   async function fetchData() {
     setLoading(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      let empData: any = null
 
-      const { data: profile } = await supabase.from('perfiles').select('nombre_completo').eq('id', user.id).single()
-      setUserName(profile?.nombre_completo || user.email || 'Administrador')
-      let empQuery = supabase.from('empleados').select('*')
-      if (profile?.nombre_completo) {
-        empQuery = empQuery.or(`correo_electronico.eq.${user.email},nombre.ilike.%${profile.nombre_completo.split(' ')[0]}%`)
+      if (impersonatedEmployee) {
+        // Mode Impersonated Worker View
+        empData = impersonatedEmployee
+        setUserName(`${impersonatedEmployee.nombre} ${impersonatedEmployee.apellido_paterno}`)
       } else {
-        empQuery = empQuery.eq('correo_electronico', user.email)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        const { data: profile } = await supabase.from('perfiles').select('nombre_completo').eq('id', user.id).single()
+        setUserName(profile?.nombre_completo || user.email || 'Administrador')
+        let empQuery = supabase.from('empleados').select('*')
+        if (profile?.nombre_completo) {
+          empQuery = empQuery.or(`correo_electronico.eq.${user.email},nombre.ilike.%${profile.nombre_completo.split(' ')[0]}%`)
+        } else {
+          empQuery = empQuery.eq('correo_electronico', user.email)
+        }
+        const { data: queriedEmp } = await empQuery.maybeSingle()
+        empData = queriedEmp
       }
-      const { data: empData } = await empQuery.maybeSingle()
 
       if (!empData) return
       setEmployee(empData)
@@ -121,9 +133,27 @@ export default function MyWorkTodayPage() {
     }
   }
 
-  const handleCerrarDia = async () => {
+  const handleCerrarDia = async (forceWithoutPhoto = false) => {
     if (!employee) return
-    if (!confirm('¿Cerrar el día de hoy y enviar a Autorizaciones? Ya no podrás agregar checadas.')) return
+
+    // Verify photo evidence
+    const hasPhotoEvidence = activities.some(act => Boolean(act.storage_url))
+
+    if (!hasPhotoEvidence && !forceWithoutPhoto) {
+      const wantToUpload = confirm(
+        language === 'es'
+          ? '📷 ATENCIÓN: No has adjuntado ninguna fotografía de evidencia para el día de hoy.\n\n¿Deseas cerrar el día de todas formas sin fotos de evidencia?'
+          : '📷 ATTENTION: You have not attached any photo evidence for today.\n\nDo you want to close the day anyway without photo evidence?'
+      )
+      if (!wantToUpload) return
+    }
+
+    if (!confirm(
+      language === 'es'
+        ? '¿Cerrar el día de hoy y enviarlo para autorización ejecutiva?'
+        : 'Close today and submit for executive authorization?'
+    )) return
+
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd')
       const res = await fetch('/api/checadas', {
@@ -143,7 +173,12 @@ export default function MyWorkTodayPage() {
       }, { onConflict: 'employee_id,date' })
 
       if (error) throw error
-      setMessage({ type: 'success', text: '¡Día cerrado y enviado a Autorizaciones correctamente!' })
+      setMessage({ 
+        type: 'success', 
+        text: language === 'es' 
+          ? '¡Día cerrado y enviado a Autorizaciones correctamente!' 
+          : 'Workday closed and submitted for authorization successfully!' 
+      })
       fetchData()
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message || 'Error al cerrar el día.' })
@@ -440,7 +475,7 @@ export default function MyWorkTodayPage() {
             
             {(selectedDayStatus === 'draft' || selectedDayStatus === 'none') && events.length >= 2 && (
               <button 
-                onClick={handleCerrarDia}
+                onClick={() => handleCerrarDia(false)}
                 className="w-full bg-white text-indigo-600 font-black py-4 rounded-2xl uppercase text-[10px] tracking-[0.3em] shadow-xl hover:bg-slate-50 transition-all active:scale-95 mt-6 flex items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4" />
@@ -449,38 +484,111 @@ export default function MyWorkTodayPage() {
             )}
           </div>
 
-          <div className="glass shadow-2xl rounded-3xl p-8 border border-white/5 relative overflow-hidden lg:col-span-3">
-             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                <Clock className="w-40 h-40" />
+          {/* Interactive Step-by-Step Guided Workday Process */}
+          <div className="glass-card shadow-2xl rounded-3xl p-6 sm:p-8 border border-[var(--border-color)] relative overflow-hidden lg:col-span-3 space-y-6">
+             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[var(--border-color)] pb-4 gap-2">
+                <div>
+                  <h3 className="text-base font-black text-[var(--text-main)] uppercase tracking-tight flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-indigo-400 animate-pulse" />
+                    {t('interactive_attendance')} (Proceso Guiado Paso a Paso)
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Registra tu horario en 4 etapas sencillas (Entrada ➔ Salida a Comer ➔ Regreso de Comer ➔ Salida Final)
+                  </p>
+                </div>
+                <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-wider rounded-full border border-indigo-500/20 w-fit">
+                  Paso a Paso ⚡
+                </span>
              </div>
-             <h3 className="text-xs font-black text-white uppercase tracking-[0.4em] mb-8 flex items-center">
-                <Zap className="w-4 h-4 mr-2 text-indigo-400" />
-                {t('interactive_attendance')}
-             </h3>
-             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 h-full">
+
+             {/* Process Stepper */}
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { type: 'ENTRADA', label: t('entrada'), icon: Play, color: 'indigo' },
-                  { type: 'COMIDA_SALIDA', label: t('comida_out'), icon: Coffee, color: 'amber' },
-                  { type: 'COMIDA_REGRESO', label: t('comida_in'), icon: Zap, color: 'cyan' },
-                  { type: 'SALIDA_FINAL', label: t('salida_final'), icon: LogOut, color: 'red' },
-                ].map((btn) => (
-                  <button 
-                    key={btn.type}
-                    onClick={() => handleAttendance(btn.type)}
-                    className={cn(
-                      "group flex flex-col items-center justify-center py-8 rounded-2xl border-2 transition-all active:scale-95 relative overflow-hidden",
-                      btn.color === 'indigo' ? "border-indigo-500/20 bg-indigo-500/5 hover:border-indigo-500 hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]" :
-                      btn.color === 'amber' ? "border-amber-500/20 bg-amber-500/5 hover:border-amber-500 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]" :
-                      btn.color === 'cyan' ? "border-cyan-500/20 bg-cyan-500/5 hover:border-cyan-500 hover:shadow-[0_0_20px_rgba(6,182,212,0.4)]" :
-                      "border-red-500/20 bg-red-500/5 hover:border-red-500 hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]"
-                    )}
-                  >
-                    <btn.icon className="w-10 h-10 mb-4 transition-transform hover:scale-110" />
-                    <span className="text-xs font-black uppercase text-center tracking-tighter text-white brightness-90">
-                      {btn.label}
-                    </span>
-                  </button>
-                ))}
+                  { step: 1, type: 'ENTRADA', label: t('entrada'), sublabel: 'Inicio de Turno', icon: Play, color: 'indigo' },
+                  { step: 2, type: 'SALIDA_COMER', label: t('comida_out'), sublabel: 'Pausa Alimento', icon: Coffee, color: 'amber' },
+                  { step: 3, type: 'ENTRADA_COMER', label: t('comida_in'), sublabel: 'Retorno a Labores', icon: Zap, color: 'cyan' },
+                  { step: 4, type: 'SALIDA_FINAL', label: t('salida_final'), sublabel: 'Cierre de Jornada', icon: LogOut, color: 'rose' },
+                ].map((stepItem) => {
+                  const ev = events.find((e: any) => {
+                    if (stepItem.type === 'ENTRADA') return e.event_type === 'ENTRADA' || e.event_type === 'CHECK_IN'
+                    if (stepItem.type === 'SALIDA_COMER') return e.event_type === 'SALIDA_COMER' || e.event_type === 'COMIDA_SALIDA'
+                    if (stepItem.type === 'ENTRADA_COMER') return e.event_type === 'ENTRADA_COMER' || e.event_type === 'COMIDA_REGRESO'
+                    if (stepItem.type === 'SALIDA_FINAL') return e.event_type === 'SALIDA_FINAL' || e.event_type === 'SALIDA'
+                    return e.event_type === stepItem.type
+                  })
+
+                  const isDone = Boolean(ev)
+
+                  return (
+                    <div 
+                      key={stepItem.type}
+                      className={cn(
+                        "cyber-card p-5 rounded-2xl border transition-all flex flex-col justify-between min-h-[190px] relative group",
+                        isDone 
+                          ? "bg-emerald-500/10 border-emerald-500/30" 
+                          : "bg-[var(--bg-card)] border-[var(--border-color)] hover:border-indigo-500/40"
+                      )}
+                    >
+                      {/* Step Badge Number */}
+                      <div className="flex items-center justify-between mb-3">
+                        <span className={cn(
+                          "w-7 h-7 rounded-full text-xs font-black flex items-center justify-center border",
+                          isDone 
+                            ? "bg-emerald-500 text-white border-emerald-400" 
+                            : "bg-indigo-500/20 text-indigo-400 border-indigo-500/30"
+                        )}>
+                          {isDone ? <Check className="w-4 h-4" /> : stepItem.step}
+                        </span>
+                        <span className="text-[9px] font-black uppercase tracking-wider text-[var(--text-muted)]">
+                          {isDone ? 'COMPLETADO' : `PASO ${stepItem.step}`}
+                        </span>
+                      </div>
+
+                      {/* Icon & Labels */}
+                      <div className="space-y-1 my-2">
+                        <div className="flex items-center gap-2">
+                          <stepItem.icon className={cn(
+                            "w-5 h-5",
+                            isDone ? "text-emerald-400" : "text-indigo-400"
+                          )} />
+                          <h4 className="text-sm font-black text-[var(--text-main)] uppercase tracking-tight">
+                            {stepItem.label}
+                          </h4>
+                        </div>
+                        <p className="text-[10px] font-semibold text-[var(--text-muted)]">{stepItem.sublabel}</p>
+                      </div>
+
+                      {/* Recorded Time or Action Button */}
+                      <div className="mt-4 pt-3 border-t border-[var(--border-color)]">
+                        {ev ? (
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-[9px] text-[var(--text-muted)] uppercase font-bold">Hora Registrada:</p>
+                              <p className="text-base font-black text-emerald-400">
+                                {new Date(ev.event_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleAttendance(stepItem.type)}
+                              className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all"
+                              title="Re-marcar o actualizar hora"
+                            >
+                              Actualizar ⚡
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleAttendance(stepItem.type)}
+                            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider transition-all float-btn shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2"
+                          >
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Marcar Hora Ahora</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
              </div>
           </div>
         </div>

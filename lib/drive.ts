@@ -13,12 +13,11 @@ async function getDriveClient() {
     throw new Error('Google Drive Credentials not configured in GOOGLE_SERVICE_ACCOUNT_JSON');
   }
 
-  const auth = new google.auth.JWT(
-    credentials.client_email,
-    undefined,
-    credentials.private_key,
-    SCOPES
-  );
+  const auth = new google.auth.JWT({
+    email: credentials.client_email,
+    key: credentials.private_key,
+    scopes: SCOPES
+  });
 
   return google.drive({ version: 'v3', auth });
 }
