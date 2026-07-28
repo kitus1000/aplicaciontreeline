@@ -88,17 +88,27 @@ export default function KPIDashboardPage() {
 
       const empList = employees || []
 
-      // 3. Fetch Today's Workday Events
-      const { data: eventsToday } = await supabase
+      // 3. Fetch Today's Workday Events (tabla principal que usa el kiosko y app móvil)
+      const { data: eventsToday, error: eventsError } = await supabase
         .from('workday_events')
         .select('*')
         .eq('date', selectedDate)
 
-      // 4. Fetch Today's Legacy Checadas
-      const { data: checadasToday } = await supabase
+      if (eventsError) console.error('workday_events error:', eventsError)
+      console.log(`workday_events HOY (${selectedDate}):`, eventsToday?.length ?? 0, 'registros')
+      if (eventsToday && eventsToday.length > 0) {
+        console.log('Tipos encontrados:', [...new Set(eventsToday.map((e: any) => e.event_type))].join(', '))
+        console.log('IDs de empleados:', [...new Set(eventsToday.map((e: any) => e.employee_id))].join(', '))
+      }
+
+      // 4. Fetch Today's Legacy Checadas (tabla vieja - puede estar vacía para fechas recientes)
+      const { data: checadasToday, error: checadasError } = await supabase
         .from('checadas')
         .select('*')
         .eq('fecha_local', selectedDate)
+
+      if (checadasError) console.error('checadas error:', checadasError)
+      console.log(`checadas HOY (${selectedDate}):`, checadasToday?.length ?? 0, 'registros')
 
       // 5. Fetch Today's Permissions / Approvals
       const { data: approvalsToday } = await supabase
@@ -158,53 +168,62 @@ export default function KPIDashboardPage() {
       })
 
       // BUILD WORKER STEPPERS (Entrada, Comida, Salida, Permiso per worker)
+      // TIPOS EN workday_events (normalizados por /api/checadas):
+      //   ENTRADA, SALIDA_COMER, ENTRADA_COMER, SALIDA_FINAL, SALIDA_FINAL_ALT
+      //   PERMISO_PERSONAL, REGRESO_PERMISO_PERSONAL, SALIDA_OPERACIONES, REGRESO_OPERACIONES
       let countEnJornada = 0
       let countEnComida = 0
       let countConSalida = 0
       let countPermisos = 0
 
       const steppers = empList.map(emp => {
-        const matchEmp = (idToCheck: any) => {
+        // Match por UUID (id_empleado) - principal en workday_events
+        const matchEmpUUID = (idToCheck: any) => {
           if (!idToCheck) return false
-          const str = String(idToCheck).toLowerCase()
-          return str === String(emp.id_empleado).toLowerCase() || 
-                 str === String(emp.numero_empleado).toLowerCase()
+          return String(idToCheck).toLowerCase() === String(emp.id_empleado).toLowerCase()
+        }
+        // Match por numero_empleado - usado en checadas legacy
+        const matchEmpNum = (idToCheck: any) => {
+          if (!idToCheck) return false
+          return String(idToCheck).toLowerCase() === String(emp.numero_empleado).toLowerCase()
+        }
+        const matchEmp = (idToCheck: any) => matchEmpUUID(idToCheck) || matchEmpNum(idToCheck)
+
+        // Eventos de workday_events (principal - kiosko y app móvil)
+        const empWorkdayEvs = eventsToday?.filter(e => matchEmpUUID(e.employee_id)) || []
+        // Checadas legacy (por si acaso)
+        const empLegacyChecadas = checadasToday?.filter(c => matchEmp(c.id_empleado) || matchEmpNum(c.id_empleado_token)) || []
+        const empApproval = approvalsToday?.find(a => matchEmpUUID(a.employee_id))
+        const empPermisoAut = permisosToday?.find(p => matchEmpUUID(p.id_empleado))
+
+        // Helper: buscar evento por tipo (workday_events primero, luego checadas legacy)
+        const getEventTime = (weTypes: string[], legacyTypes: string[]) => {
+          const weMatch = empWorkdayEvs.find(e => weTypes.includes(e.event_type))
+          if (weMatch) return { event_time: weMatch.event_time, source: 'workday_events', type: weMatch.event_type }
+          const legMatch = empLegacyChecadas.find(c => legacyTypes.includes(c.tipo_checada))
+          if (legMatch) return { event_time: legMatch.timestamp_checada || legMatch.hora_entrada, source: 'checadas', type: legMatch.tipo_checada }
+          return null
         }
 
-        const empWorkdayEvs = eventsToday?.filter(e => matchEmp(e.employee_id)) || []
-        const empLegacyChecadas = checadasToday?.filter(c => matchEmp(c.id_empleado) || matchEmp(c.id_empleado_token)) || []
-        const empApproval = approvalsToday?.find(a => matchEmp(a.employee_id))
-        const empPermisoAut = permisosToday?.find(p => matchEmp(p.id_empleado))
+        // ENTRADA: tipo 'ENTRADA' en ambas tablas
+        const entradaEv = getEventTime(['ENTRADA'], ['ENTRADA', 'ENTRADA_SALIDA'])
 
-        // ENTRADA
-        const entradaEv = empWorkdayEvs.find(e => e.event_type === 'ENTRADA') || 
-          empLegacyChecadas.find(c => c.tipo_checada === 'ENTRADA') ? {
-            event_time: empWorkdayEvs.find(e => e.event_type === 'ENTRADA')?.event_time || 
-                        empLegacyChecadas.find(c => c.tipo_checada === 'ENTRADA')?.timestamp_checada
-          } : null
+        // SALIDA A COMER: API guarda 'SALIDA_COMER' (normalizado desde COMIDA_SALIDA)
+        const salidaComerEv = getEventTime(['SALIDA_COMER'], ['SALIDA_COMER', 'COMIDA_SALIDA'])
 
-        // SALIDA COMER
-        const salidaComerEv = empWorkdayEvs.find(e => e.event_type === 'SALIDA_COMER') || 
-          empLegacyChecadas.find(c => c.tipo_checada === 'SALIDA_COMER') ? {
-            event_time: empWorkdayEvs.find(e => e.event_type === 'SALIDA_COMER')?.event_time || 
-                        empLegacyChecadas.find(c => c.tipo_checada === 'SALIDA_COMER')?.timestamp_checada
-          } : null
+        // REGRESO DE COMER: API guarda 'ENTRADA_COMER' (normalizado desde COMIDA_REGRESO)
+        // IMPORTANTE: NO es 'REGRESO_COMER', es 'ENTRADA_COMER'
+        const regresoComerEv = getEventTime(['ENTRADA_COMER'], ['ENTRADA_COMER', 'COMIDA_REGRESO', 'REGRESO_COMER'])
 
-        // REGRESO COMER
-        const regresoComerEv = empWorkdayEvs.find(e => e.event_type === 'REGRESO_COMER') || 
-          empLegacyChecadas.find(c => c.tipo_checada === 'REGRESO_COMER') ? {
-            event_time: empWorkdayEvs.find(e => e.event_type === 'REGRESO_COMER')?.event_time || 
-                        empLegacyChecadas.find(c => c.tipo_checada === 'REGRESO_COMER')?.timestamp_checada
-          } : null
+        // SALIDA FINAL: API guarda 'SALIDA_FINAL' o 'SALIDA_FINAL_ALT' (normalizado desde SALIDA)
+        const salidaEv = getEventTime(['SALIDA_FINAL', 'SALIDA_FINAL_ALT', 'SALIDA'], ['SALIDA', 'SALIDA_FINAL', 'ENTRADA_SALIDA'])
 
-        // SALIDA FINAL
-        const salidaEv = empWorkdayEvs.find(e => e.event_type === 'SALIDA') || 
-          empLegacyChecadas.find(c => c.tipo_checada === 'SALIDA') ? {
-            event_time: empWorkdayEvs.find(e => e.event_type === 'SALIDA')?.event_time || 
-                        empLegacyChecadas.find(c => c.tipo_checada === 'SALIDA')?.timestamp_checada
-          } : null
-
-        const isPermiso = !!empPermisoAut || empApproval?.comments?.includes('PERMISO') || empWorkdayEvs.some(e => e.event_type?.startsWith('PERMISO_'))
+        // PERMISO: cualquier evento de permiso
+        const isPermiso = !!empPermisoAut || 
+          empApproval?.status === 'PERMISO_CON_SUELDO' ||
+          empApproval?.status === 'PERMISO_SIN_SUELDO' ||
+          empApproval?.comments?.toLowerCase().includes('permiso') ||
+          empWorkdayEvs.some(e => ['PERMISO_CON_SUELDO', 'PERMISO_SIN_SUELDO', 'PERMISO_PERSONAL'].includes(e.event_type || ''))
 
         if (isPermiso) countPermisos++
         else if (salidaEv) countConSalida++
@@ -218,8 +237,9 @@ export default function KPIDashboardPage() {
           regresoComerEv,
           salidaEv,
           isPermiso,
-          permisoTipo: (empApproval?.comments?.includes('Con Sueldo') || empPermisoAut?.tipo_permiso === 'PERMISO_CON_SUELDO') ? 'CON_SUELDO' : 'SIN_SUELDO',
-          motivoPermiso: empApproval?.comments || empPermisoAut?.motivo || 'Permiso Autorizado'
+          permisoTipo: (empApproval?.status === 'PERMISO_CON_SUELDO' || empApproval?.comments?.includes('Con Sueldo') || empPermisoAut?.tipo_permiso === 'PERMISO_CON_SUELDO') ? 'CON_SUELDO' : 'SIN_SUELDO',
+          motivoPermiso: empApproval?.comments || empPermisoAut?.motivo || 'Permiso Autorizado',
+          allEventsToday: empWorkdayEvs // para depuración
         }
       })
 
@@ -329,9 +349,17 @@ export default function KPIDashboardPage() {
   const formatHora = (isoStr?: string) => {
     if (!isoStr) return null
     try {
-      return new Date(isoStr).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true })
+      // Maneja tanto ISO strings como strings de hora simples (HH:MM:SS)
+      if (isoStr.includes('T') || isoStr.includes('Z')) {
+        return new Date(isoStr).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true })
+      }
+      // Formato HH:MM:SS legacy de checadas
+      const [h, m] = isoStr.split(':')
+      const d = new Date()
+      d.setHours(parseInt(h), parseInt(m), 0)
+      return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true })
     } catch (e) {
-      return null
+      return isoStr // mostrar tal cual si falla
     }
   }
 
