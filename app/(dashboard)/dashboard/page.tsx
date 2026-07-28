@@ -32,7 +32,15 @@ export default function KPIDashboardPage() {
   const { t } = useI18n()
   const [userName, setUserName] = useState('')
   const [loading, setLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const getTodayLocal = () => {
+    const d = new Date()
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const [selectedDate, setSelectedDate] = useState(getTodayLocal)
   const [searchQuery, setSearchQuery] = useState('')
 
   // Metrics State
@@ -139,37 +147,41 @@ export default function KPIDashboardPage() {
       let countPermisos = 0
 
       const steppers = empList.map(emp => {
-        // Match por UUID (id_empleado) - principal en workday_events
-        const matchEmpUUID = (idToCheck: any) => {
+        // Flexible Employee Matcher: matches UUID, numero_empleado, or #numero_empleado
+        const matchEmp = (idToCheck: any) => {
           if (!idToCheck) return false
-          return String(idToCheck).toLowerCase() === String(emp.id_empleado).toLowerCase()
+          const target = String(idToCheck).toLowerCase().trim()
+          const uuid = String(emp.id_empleado || '').toLowerCase().trim()
+          const num = String(emp.numero_empleado || '').toLowerCase().trim()
+          return target === uuid || target === num || target === `#${num}`
         }
 
         // Eventos del empleado hoy en workday_events
-        const empEvs = eventsToday?.filter(e => matchEmpUUID(e.employee_id)) || []
-        const empApproval = approvalsToday?.find(a => matchEmpUUID(a.employee_id))
+        const empEvs = eventsToday?.filter(e => matchEmp(e.employee_id)) || []
+        const empApproval = approvalsToday?.find(a => matchEmp(a.employee_id))
 
-        // Helper: buscar primer evento por tipo
+        // Helper: buscar primer evento por tipo (robusto e insensible a mayúsculas)
         const getEv = (types: string[]) => {
-          const match = empEvs.find(e => types.includes(e.event_type))
+          const lowerTypes = types.map(t => t.toLowerCase())
+          const match = empEvs.find(e => lowerTypes.includes(String(e.event_type || '').toLowerCase().trim()))
           return match ? { event_time: match.event_time, type: match.event_type } : null
         }
 
         // ENTRADA
-        const entradaEv = getEv(['ENTRADA'])
+        const entradaEv = getEv(['ENTRADA', 'CHECK_IN', 'INICIO'])
         // SALIDA A COMER: API normaliza COMIDA_SALIDA -> SALIDA_COMER
-        const salidaComerEv = getEv(['SALIDA_COMER'])
+        const salidaComerEv = getEv(['SALIDA_COMER', 'COMIDA_SALIDA', 'SALIDA_ALIMENTO'])
         // REGRESO DE COMER: API normaliza COMIDA_REGRESO -> ENTRADA_COMER
-        const regresoComerEv = getEv(['ENTRADA_COMER'])
+        const regresoComerEv = getEv(['ENTRADA_COMER', 'COMIDA_REGRESO', 'REGRESO_COMER'])
         // SALIDA FINAL: API normaliza SALIDA -> SALIDA_FINAL
-        const salidaEv = getEv(['SALIDA_FINAL', 'SALIDA_FINAL_ALT', 'SALIDA'])
+        const salidaEv = getEv(['SALIDA_FINAL', 'SALIDA_FINAL_ALT', 'SALIDA', 'CHECK_OUT'])
 
         // PERMISO
         const isPermiso = 
           empApproval?.status === 'PERMISO_CON_SUELDO' ||
           empApproval?.status === 'PERMISO_SIN_SUELDO' ||
           empApproval?.comments?.toLowerCase().includes('permiso') ||
-          empEvs.some(e => ['PERMISO_CON_SUELDO', 'PERMISO_SIN_SUELDO', 'PERMISO_PERSONAL'].includes(e.event_type || ''))
+          empEvs.some(e => String(e.event_type || '').toLowerCase().includes('permiso'))
 
         if (isPermiso) countPermisos++
         else if (salidaEv) countConSalida++
