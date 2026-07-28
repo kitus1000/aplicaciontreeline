@@ -127,16 +127,38 @@ export default function MiTrabajoProPage() {
       })
       setWeeklyStatus(statusMap)
 
-      // Fetch active permission for selected date
-      const { data: permData } = await supabase
-        .from('permisos_autorizados')
+      // Fetch active permission for selected date (multi-source check)
+      let activePerm: any = null
+
+      const { data: permEv } = await supabase
+        .from('workday_events')
         .select('*')
-        .eq('id_empleado', empData.id_empleado)
-        .lte('fecha_inicio', dateStr)
-        .gte('fecha_fin', dateStr)
+        .eq('employee_id', empData.id_empleado)
+        .eq('date', dateStr)
+        .ilike('event_type', 'PERMISO_%')
         .maybeSingle()
 
-      setActivePermission(permData || null)
+      if (permEv) {
+        activePerm = {
+          tipo_permiso: permEv.event_type,
+          motivo: 'Permiso Autorizado por Administración'
+        }
+      } else {
+        try {
+          const { data: pData } = await supabase
+            .from('permisos_autorizados')
+            .select('*')
+            .eq('id_empleado', empData.id_empleado)
+            .lte('fecha_inicio', dateStr)
+            .gte('fecha_fin', dateStr)
+            .maybeSingle()
+          if (pData) activePerm = pData
+        } catch (e) {
+          // Table optional
+        }
+      }
+
+      setActivePermission(activePerm)
 
       // 2. Fetch events for selected day
       const { data: evsData } = await supabase

@@ -87,24 +87,30 @@ export default function AsistenciaDashboard() {
                 .eq('fecha_local', selectedDate)
                 .order('timestamp_checada', { ascending: false })
 
-            // 3. Fetch permisos_autorizados active on selectedDate
-            const { data: permisosData } = await supabase
-                .from('permisos_autorizados')
-                .select(`
-                    *,
-                    empleados (id_empleado, nombre, apellido_paterno, apellido_materno, numero_empleado)
-                `)
-                .lte('fecha_inicio', selectedDate)
-                .gte('fecha_fin', selectedDate)
+            // 3. Safe Fetch permisos_autorizados (if exists)
+            let permisosData: any[] = []
+            try {
+                const { data: pData } = await supabase
+                    .from('permisos_autorizados')
+                    .select(`
+                        *,
+                        empleados (id_empleado, nombre, apellido_paterno, apellido_materno, numero_empleado)
+                    `)
+                    .lte('fecha_inicio', selectedDate)
+                    .gte('fecha_fin', selectedDate)
+                if (pData) permisosData = pData
+            } catch (e) {
+                // Table Optional
+            }
 
             // Combine and format records
             const combinedRecords: any[] = []
-            const seenIds = new Set<string>()
+            const seenKeys = new Set<string>()
 
             // Add Permisos Autorizados first
             permisosData?.forEach(p => {
-                const uniqueKey = `permiso_${p.id}`
-                seenIds.add(uniqueKey)
+                const uniqueKey = `${p.id_empleado}_permiso_${selectedDate}`
+                seenKeys.add(uniqueKey)
                 combinedRecords.push({
                     id: p.id,
                     dbTable: 'permisos_autorizados',
@@ -120,22 +126,30 @@ export default function AsistenciaDashboard() {
 
             eventsData?.forEach(e => {
                 const uniqueKey = `${e.employee_id}_${e.event_type}_${e.event_time}`
-                seenIds.add(uniqueKey)
-                combinedRecords.push({
-                    id: e.id,
-                    dbTable: 'workday_events',
-                    fecha_local: e.date,
-                    timestamp_checada: e.event_time,
-                    tipo_checada: e.event_type,
-                    estatus_puntualidad: e.estatus_puntualidad || 'PUNTUAL',
-                    source: e.source || 'web_mi_trabajo',
-                    empleados: e.empleados
-                })
+                if (!seenKeys.has(uniqueKey)) {
+                    seenKeys.add(uniqueKey)
+                    const isPermisoEvent = e.event_type?.startsWith('PERMISO_')
+                    combinedRecords.push({
+                        id: e.id,
+                        dbTable: 'workday_events',
+                        fecha_local: e.date,
+                        timestamp_checada: e.event_time,
+                        tipo_checada: isPermisoEvent 
+                            ? (e.event_type === 'PERMISO_CON_SUELDO' ? 'PERMISO CON SUELDO' : 'PERMISO SIN SUELDO')
+                            : e.event_type,
+                        estatus_puntualidad: isPermisoEvent 
+                            ? (e.event_type === 'PERMISO_CON_SUELDO' ? 'CON_SUELDO' : 'SIN_SUELDO')
+                            : (e.estatus_puntualidad || 'PUNTUAL'),
+                        source: e.source || 'web_mi_trabajo',
+                        empleados: e.empleados
+                    })
+                }
             })
 
             legacyData?.forEach(c => {
                 const uniqueKey = `${c.id_empleado}_${c.tipo_checada}_${c.timestamp_checada}`
-                if (!seenIds.has(uniqueKey)) {
+                if (!seenKeys.has(uniqueKey)) {
+                    seenKeys.add(uniqueKey)
                     combinedRecords.push({
                         id: c.id,
                         dbTable: 'checadas',
@@ -152,12 +166,13 @@ export default function AsistenciaDashboard() {
             setChecadas(combinedRecords)
 
             // Calculate KPIs
+            const permisosCount = combinedRecords.filter(r => r.estatus_puntualidad === 'CON_SUELDO' || r.estatus_puntualidad === 'SIN_SUELDO').length
             setStats({
                 totalChecadas: combinedRecords.length,
                 puntuales: combinedRecords.filter(r => r.estatus_puntualidad === 'PUNTUAL' || !r.estatus_puntualidad).length,
                 retardos: combinedRecords.filter(r => r.estatus_puntualidad === 'RETARDO').length,
                 faltas: combinedRecords.filter(r => r.estatus_puntualidad === 'FALTA').length,
-                permisos: permisosData ? permisosData.length : 0
+                permisos: permisosCount
             })
 
         } catch (error) {
@@ -176,27 +191,56 @@ export default function AsistenciaDashboard() {
 
         setIsSavingPermiso(true)
         try {
-            const { error } = await supabase.from('permisos_autorizados').insert({
-                id_empleado: permisoForm.id_empleado,
-                tipo_permiso: permisoForm.tipo_permiso,
-                tipo_checada: permisoForm.tipo_permiso,
-                fecha_inicio: permisoForm.fecha_inicio,
-                fecha_fin: permisoForm.fecha_fin,
-                vigencia_desde: permisoForm.fecha_inicio,
-                vigencia_hasta: permisoForm.fecha_fin,
-                motivo: permisoForm.motivo || 'Permiso Autorizado por Administrador',
-                estatus: 'Activo'
-            })
+            const startDate = new Date(permisoForm.fecha_inicio + 'T00:00:00')
+            const endDate = new Date(permisoForm.fecha_fin + 'T00:00:00')
+            
+            // Loop over dates in range
+            const datesToProcess: string[] = []
+            let cur = new Date(startDate)
+            while (cur <= endDate) {
+                const year = cur.getFullYear()
+                const month = String(cur.getMonth() + 1).padStart(2, '0')
+                const day = String(cur.getDate()).padStart(2, '0')
+                datesToProcess.push(`${year}-${month}-${day}`)
+                cur.setDate(cur.getDate() + 1)
+            }
 
-            if (error) throw error
+            for (const dateStr of datesToProcess) {
+                // 1. Insert event into workday_events (ALWAYS EXISTS)
+                await supabase.from('workday_events').insert({
+                    employee_id: permisoForm.id_empleado,
+                    date: dateStr,
+                    event_type: permisoForm.tipo_permiso === 'PERMISO_CON_SUELDO' ? 'PERMISO_CON_SUELDO' : 'PERMISO_SIN_SUELDO',
+                    event_time: `${dateStr}T08:00:00`,
+                    source: 'ADMINISTRADOR',
+                    estatus_puntualidad: permisoForm.tipo_permiso === 'PERMISO_CON_SUELDO' ? 'CON_SUELDO' : 'SIN_SUELDO'
+                })
 
-            // Register status in workday_approval_status to prevent FALTA
-            await supabase.from('workday_approval_status').insert({
-                employee_id: permisoForm.id_empleado,
-                date: permisoForm.fecha_inicio,
-                status: permisoForm.tipo_permiso === 'PERMISO_CON_SUELDO' ? 'authorized' : 'authorized',
-                comments: `PERMISO AUTORIZADO (${permisoForm.tipo_permiso === 'PERMISO_CON_SUELDO' ? 'Con Sueldo' : 'Sin Sueldo'}): ${permisoForm.motivo}`
-            })
+                // 2. Insert approval status into workday_approval_status (ALWAYS EXISTS)
+                await supabase.from('workday_approval_status').insert({
+                    employee_id: permisoForm.id_empleado,
+                    date: dateStr,
+                    status: 'authorized',
+                    comments: `PERMISO AUTORIZADO (${permisoForm.tipo_permiso === 'PERMISO_CON_SUELDO' ? 'Con Sueldo' : 'Sin Sueldo'}): ${permisoForm.motivo || 'Permiso Aprobado'}`
+                })
+
+                // 3. Try inserting into permisos_autorizados if present (silent catch)
+                try {
+                    await supabase.from('permisos_autorizados').insert({
+                        id_empleado: permisoForm.id_empleado,
+                        tipo_permiso: permisoForm.tipo_permiso,
+                        tipo_checada: permisoForm.tipo_permiso,
+                        fecha_inicio: dateStr,
+                        fecha_fin: dateStr,
+                        vigencia_desde: dateStr,
+                        vigencia_hasta: dateStr,
+                        motivo: permisoForm.motivo || 'Permiso Autorizado por Administrador',
+                        estatus: 'Activo'
+                    })
+                } catch (e) {
+                    // Optional table, fallback gracefully handled
+                }
+            }
 
             setShowPermisoModal(false)
             setPermisoForm({
@@ -215,20 +259,34 @@ export default function AsistenciaDashboard() {
     }
 
     async function eliminarChecada(record: any) {
-        if (!confirm('¿Seguro que deseas revocar/eliminar este permiso? El trabajador podrá volver a realizar su marcaje de turno en su celular de inmediato.')) return
+        if (!confirm('¿Seguro que deseas revocar/eliminar este permiso o registro? El trabajador podrá volver a realizar su marcaje de turno en su celular de inmediato.')) return
         const table = record.dbTable || 'workday_events'
-        const { error } = await supabase.from(table).delete().eq('id', record.id)
         
-        if (table === 'permisos_autorizados' && record.empleados?.id_empleado) {
-            await supabase
-                .from('workday_approval_status')
-                .delete()
-                .eq('employee_id', record.empleados.id_empleado)
-                .eq('date', record.fecha_local)
-        }
+        try {
+            const { error } = await supabase.from(table).delete().eq('id', record.id)
+            if (error) throw error
 
-        if (error) alert('Error al eliminar: ' + error.message)
-        else fetchChecadas()
+            // Limpieza en cascada para permisos
+            if (record.empleados?.id_empleado) {
+                await supabase
+                    .from('workday_events')
+                    .delete()
+                    .eq('employee_id', record.empleados.id_empleado)
+                    .eq('date', record.fecha_local)
+                    .ilike('event_type', 'PERMISO_%')
+
+                await supabase
+                    .from('workday_approval_status')
+                    .delete()
+                    .eq('employee_id', record.empleados.id_empleado)
+                    .eq('date', record.fecha_local)
+                    .ilike('comments', '%PERMISO AUTORIZADO%')
+            }
+
+            fetchChecadas()
+        } catch (err: any) {
+            alert('Error al eliminar: ' + err.message)
+        }
     }
 
     const formatHora = (isoStr: string) => {
@@ -369,7 +427,7 @@ export default function AsistenciaDashboard() {
                                         <td className="p-4">
                                             <span className={cn(
                                                 "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border",
-                                                r.dbTable === 'permisos_autorizados'
+                                                r.dbTable === 'permisos_autorizados' || r.tipo_checada?.includes('PERMISO')
                                                     ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/30"
                                                     : "bg-slate-500/10 text-indigo-400 border-[var(--border-color)]"
                                             )}>
@@ -377,7 +435,7 @@ export default function AsistenciaDashboard() {
                                             </span>
                                         </td>
                                         <td className="p-4 font-black text-[var(--text-main)]">
-                                            {r.dbTable === 'permisos_autorizados' ? '🏖️ Permiso Todo el Día' : formatHora(r.timestamp_checada)}
+                                            {r.tipo_checada?.includes('PERMISO') ? '🏖️ Permiso Todo el Día' : formatHora(r.timestamp_checada)}
                                         </td>
                                         <td className="p-4 text-[10px] text-[var(--text-muted)] uppercase font-bold">
                                             {r.source || 'ADMINISTRADOR'}
