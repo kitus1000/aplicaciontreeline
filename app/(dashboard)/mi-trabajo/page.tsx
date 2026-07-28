@@ -846,6 +846,7 @@ export default function MiTrabajoProPage() {
               </div>
             ))}
         </div>
+      </div>
       )}
 
       {/* 🤖 AUDITORÍA INTELIGENTE PRE-CIERRE DE DÍA CON IA (MODAL CYBER) */}
