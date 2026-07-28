@@ -20,6 +20,8 @@ import { useImpersonation } from '@/context/ImpersonationContext'
 import { supabase } from '@/utils/supabase/client'
 import { cn } from '@/utils/cn'
 
+import { BuilderAvatarAnimation } from '@/components/BuilderAvatarAnimation'
+
 export function AIAssistantWidget() {
   const pathname = usePathname()
   const { t, language } = useI18n()
@@ -129,13 +131,11 @@ export function AIAssistantWidget() {
       
       {/* Speech Bubble Notification (Appears smoothly without blocking) */}
       {hasPrompted && !isOpen && (
-        <div className="pointer-events-auto mb-3 max-w-xs p-3.5 rounded-2xl glass-card border border-indigo-500/30 shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-300 flex items-start gap-3 relative group">
-          <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
-            <Sparkles className="w-4 h-4 animate-pulse" />
-          </div>
+        <div className="pointer-events-auto mb-3 max-w-xs p-3.5 rounded-2xl glass-card border border-amber-500/40 shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-300 flex items-start gap-3 relative group">
+          <BuilderAvatarAnimation size="sm" />
           <div className="flex-1 pr-4">
-            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-wider flex items-center gap-1">
-              <span>Asistente Worktrack AI</span>
+            <p className="text-[10px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1">
+              <span>Asistente Constructor AI</span>
             </p>
             <p className="text-xs font-semibold text-[var(--text-main)] mt-0.5 leading-snug">
               {currentStepMessage}
@@ -156,16 +156,14 @@ export function AIAssistantWidget() {
           
           {/* Header */}
           <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-600 to-blue-600 text-white flex items-center justify-center shadow-lg">
-                <Bot className="w-5 h-5" />
-              </div>
+            <div className="flex items-center gap-3">
+              <BuilderAvatarAnimation size="md" />
               <div>
                 <h4 className="text-xs font-black text-[var(--text-main)] uppercase tracking-wider flex items-center gap-1.5">
-                  Worktrack AI Co-pilot
+                  Worktrack Builder Co-pilot
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                 </h4>
-                <p className="text-[10px] text-indigo-400 font-bold">Guía Inteligente y Consejos</p>
+                <p className="text-[10px] text-amber-400 font-bold">Guía de Construcción y Jornada</p>
               </div>
             </div>
 
@@ -179,7 +177,7 @@ export function AIAssistantWidget() {
 
           {/* Current Status Box */}
           <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 space-y-2">
-            <div className="flex items-center justify-between text-[10px] font-black uppercase text-indigo-400 tracking-wider">
+            <div className="flex items-center justify-between text-[10px] font-black uppercase text-amber-400 tracking-wider">
               <span className="flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5" /> Estatus Actual de tu Día
               </span>
@@ -273,14 +271,11 @@ export function AIAssistantWidget() {
           setIsOpen(!isOpen)
           setHasPrompted(false)
         }}
-        className="pointer-events-auto relative p-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-2xl float-btn border border-indigo-400/40 group flex items-center gap-2"
-        title="Asistente con IA Worktrack"
+        className="pointer-events-auto relative p-2.5 rounded-2xl bg-slate-950 border border-amber-400/40 shadow-2xl float-btn group flex items-center gap-2"
+        title="Asistente Constructor Worktrack AI"
       >
-        <div className="relative">
-          <Bot className="w-6 h-6 text-white group-hover:rotate-12 transition-transform" />
-          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
-        </div>
-        <span className="hidden sm:inline text-xs font-black uppercase tracking-wider pr-1">
+        <BuilderAvatarAnimation size="sm" />
+        <span className="hidden sm:inline text-xs font-black uppercase tracking-wider pr-1 text-white">
           Asistente AI
         </span>
       </button>
