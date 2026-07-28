@@ -271,11 +271,11 @@ export function AIAssistantWidget() {
           setIsOpen(!isOpen)
           setHasPrompted(false)
         }}
-        className="pointer-events-auto relative p-2.5 rounded-2xl bg-slate-950 border border-amber-400/40 shadow-2xl float-btn group flex items-center gap-2"
+        className="pointer-events-auto relative p-2 rounded-2xl glass hover:border-amber-400/60 border border-amber-400/30 shadow-2xl float-btn group flex items-center gap-2.5 transition-all active:scale-95"
         title="Asistente Constructor Worktrack AI"
       >
         <BuilderAvatarAnimation size="sm" />
-        <span className="hidden sm:inline text-xs font-black uppercase tracking-wider pr-1 text-white">
+        <span className="hidden sm:inline text-xs font-black uppercase tracking-wider pr-2 text-[var(--text-main)]">
           Asistente AI
         </span>
       </button>
