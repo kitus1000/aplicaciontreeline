@@ -5,6 +5,7 @@ import { supabase } from '@/utils/supabase/client'
 import { Activity, Clock, LogIn, LogOut, CheckCircle, RefreshCw, AlertCircle, Calendar, Trash2, Edit, Save, X, User } from 'lucide-react'
 import Link from 'next/link'
 import { useI18n } from '@/lib/i18n'
+import { cn } from '@/utils/cn'
 
 export default function AsistenciaDashboard() {
     const { t } = useI18n()
@@ -21,20 +22,20 @@ export default function AsistenciaDashboard() {
     useEffect(() => {
         fetchChecadas()
 
-        // Supabase Realtime Subscription for live sync
-        const channel = supabase
+        // Supabase Realtime Subscriptions for live attendance sync
+        const channel1 = supabase
+            .channel('realtime-workday-events')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'workday_events' }, () => fetchChecadas())
+            .subscribe()
+
+        const channel2 = supabase
             .channel('realtime-checadas')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'checadas' },
-                () => {
-                    fetchChecadas()
-                }
-            )
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'checadas' }, () => fetchChecadas())
             .subscribe()
 
         return () => {
-            supabase.removeChannel(channel)
+            supabase.removeChannel(channel1)
+            supabase.removeChannel(channel2)
         }
     }, [selectedDate])
 
@@ -42,27 +43,69 @@ export default function AsistenciaDashboard() {
         setLoading(true)
 
         try {
-            const { data, error } = await supabase
+            // 1. Fetch workday_events for selectedDate (primary source from mi-trabajo)
+            const { data: eventsData, error: eventsErr } = await supabase
+                .from('workday_events')
+                .select(`
+                    *,
+                    empleados (id_empleado, nombre, apellido_paterno, apellido_materno, numero_empleado)
+                `)
+                .eq('date', selectedDate)
+                .order('event_time', { ascending: false })
+
+            // 2. Fetch legacy checadas
+            const { data: legacyData } = await supabase
                 .from('checadas')
                 .select(`
                     *,
-                    empleados (nombre, apellido_paterno, apellido_materno, numero_empleado),
-                    permisos_autorizados (codigo, motivo)
+                    empleados (id_empleado, nombre, apellido_paterno, apellido_materno, numero_empleado)
                 `)
                 .eq('fecha_local', selectedDate)
                 .order('timestamp_checada', { ascending: false })
 
-            if (error) throw error
+            // Combine and format records
+            const combinedRecords: any[] = []
+            const seenIds = new Set<string>()
 
-            const records = data || []
-            setChecadas(records)
+            eventsData?.forEach(e => {
+                const uniqueKey = `${e.employee_id}_${e.event_type}_${e.event_time}`
+                seenIds.add(uniqueKey)
+                combinedRecords.push({
+                    id: e.id,
+                    dbTable: 'workday_events',
+                    fecha_local: e.date,
+                    timestamp_checada: e.event_time,
+                    tipo_checada: e.event_type,
+                    estatus_puntualidad: e.estatus_puntualidad || 'PUNTUAL',
+                    source: e.source || 'web_mi_trabajo',
+                    empleados: e.empleados
+                })
+            })
+
+            legacyData?.forEach(c => {
+                const uniqueKey = `${c.id_empleado}_${c.tipo_checada}_${c.timestamp_checada}`
+                if (!seenIds.has(uniqueKey)) {
+                    combinedRecords.push({
+                        id: c.id,
+                        dbTable: 'checadas',
+                        fecha_local: c.fecha_local,
+                        timestamp_checada: c.timestamp_checada,
+                        tipo_checada: c.tipo_checada,
+                        estatus_puntualidad: c.estatus_puntualidad || 'PUNTUAL',
+                        source: 'kiosko',
+                        empleados: c.empleados
+                    })
+                }
+            })
+
+            setChecadas(combinedRecords)
 
             // Calculate KPIs
             setStats({
-                totalChecadas: records.length,
-                puntuales: records.filter(r => r.estatus_puntualidad === 'PUNTUAL').length,
-                retardos: records.filter(r => r.estatus_puntualidad === 'RETARDO').length,
-                faltas: records.filter(r => r.estatus_puntualidad === 'FALTA').length
+                totalChecadas: combinedRecords.length,
+                puntuales: combinedRecords.filter(r => r.estatus_puntualidad === 'PUNTUAL' || !r.estatus_puntualidad).length,
+                retardos: combinedRecords.filter(r => r.estatus_puntualidad === 'RETARDO').length,
+                faltas: combinedRecords.filter(r => r.estatus_puntualidad === 'FALTA').length
             })
 
         } catch (error) {
@@ -72,184 +115,160 @@ export default function AsistenciaDashboard() {
         }
     }
 
-    async function eliminarChecada(id: string) {
+    async function eliminarChecada(record: any) {
         if (!confirm('¿Seguro que deseas eliminar este registro de asistencia?')) return
-        const { error } = await supabase.from('checadas').delete().eq('id', id)
+        const table = record.dbTable || 'workday_events'
+        const { error } = await supabase.from(table).delete().eq('id', record.id)
         if (error) alert('Error al eliminar: ' + error.message)
         else fetchChecadas()
     }
 
     const formatHora = (isoStr: string) => {
-        return new Date(isoStr).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+        try {
+            return new Date(isoStr).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
+        } catch (e) {
+            return isoStr
+        }
     }
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in">
+        <div className="max-w-7xl mx-auto space-y-6 page-transition">
             {/* Cabecera / Navegación */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-zinc-200">
+            <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-[var(--border-color)] gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-zinc-900">{t('attendance_monitor_title')}</h1>
-                    <p className="text-sm text-zinc-500">{t('attendance_monitor_subtitle')}</p>
+                    <h1 className="text-2xl sm:text-3xl font-black text-[var(--text-main)] tracking-tight">
+                      {t('attendance_monitor_title')}
+                    </h1>
+                    <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mt-1">
+                      {t('attendance_monitor_subtitle')}
+                    </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 mt-4 md:mt-0">
-                    <div className="flex items-center gap-2 bg-zinc-100 px-3 py-2 rounded-lg border border-zinc-200 shadow-sm">
-                        <Calendar className="w-4 h-4 text-zinc-500" />
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 glass px-3 py-2 rounded-xl border border-[var(--border-color)]">
+                        <Calendar className="w-4 h-4 text-indigo-400" />
                         <input
                             type="date"
-                            className="bg-transparent border-none p-0 text-sm font-bold text-zinc-800 focus:ring-0"
+                            className="bg-transparent border-none p-0 text-xs font-bold text-[var(--text-main)] focus:ring-0 outline-none"
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
                         />
                     </div>
-                    <Link href="/asistencia/manual" className="text-sm font-semibold text-zinc-600 bg-white px-4 py-2 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors shadow-sm">
-                        {t('manual_records')}
-                    </Link>
-                    <Link href="/asistencia/permisos" className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-4 py-2 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors shadow-sm">
-                        {t('generate_permits')}
-                    </Link>
                     <button
                         onClick={fetchChecadas}
-                        className="flex items-center space-x-2 bg-white border border-zinc-200 shadow-sm text-sm font-medium px-4 py-2 rounded-lg hover:bg-zinc-50 transition-colors"
+                        className="p-2.5 glass hover:border-indigo-500/40 rounded-xl text-[var(--text-main)] transition-all active:scale-95"
+                        title="Actualizar Checadas"
                     >
-                        <RefreshCw className="w-4 h-4 text-zinc-500" />
+                        <RefreshCw className={loading ? "animate-spin w-4 h-4 text-indigo-400" : "w-4 h-4 text-indigo-400"} />
                     </button>
                 </div>
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm flex items-center space-x-4">
-                    <div className="p-3 bg-blue-50 rounded-lg">
-                        <Activity className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-zinc-500 uppercase">{t('today_movements')}</p>
-                        <p className="text-2xl font-bold text-zinc-900">{stats.totalChecadas}</p>
-                    </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="glass-card p-4 rounded-2xl border border-[var(--border-color)]">
+                    <p className="text-[10px] font-black uppercase text-[var(--text-muted)] tracking-wider">Total de Checadas</p>
+                    <p className="text-2xl font-black text-[var(--text-main)] mt-1">{stats.totalChecadas}</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm flex items-center space-x-4">
-                    <div className="p-3 bg-green-50 rounded-lg">
-                        <CheckCircle className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-zinc-500 uppercase">{t('on_time')}</p>
-                        <p className="text-2xl font-bold text-zinc-900">{stats.puntuales}</p>
-                    </div>
+                <div className="glass-card p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10">
+                    <p className="text-[10px] font-black uppercase text-emerald-400 tracking-wider">Puntuales</p>
+                    <p className="text-2xl font-black text-emerald-400 mt-1">{stats.puntuales}</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm flex items-center space-x-4">
-                    <div className="p-3 bg-amber-50 rounded-lg">
-                        <Clock className="w-6 h-6 text-amber-600" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-zinc-500 uppercase">{t('late')}</p>
-                        <p className="text-2xl font-bold text-zinc-900">{stats.retardos}</p>
-                    </div>
+                <div className="glass-card p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10">
+                    <p className="text-[10px] font-black uppercase text-amber-400 tracking-wider">Retardos</p>
+                    <p className="text-2xl font-black text-amber-400 mt-1">{stats.retardos}</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm flex items-center space-x-4">
-                    <div className="p-3 bg-red-50 rounded-lg">
-                        <AlertCircle className="w-6 h-6 text-red-600" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-zinc-500 uppercase">{t('absent')}</p>
-                        <p className="text-2xl font-bold text-zinc-900">{stats.faltas}</p>
-                    </div>
+                <div className="glass-card p-4 rounded-2xl border border-red-500/30 bg-red-500/10">
+                    <p className="text-[10px] font-black uppercase text-red-400 tracking-wider">Faltas / Incidencias</p>
+                    <p className="text-2xl font-black text-red-400 mt-1">{stats.faltas}</p>
                 </div>
             </div>
 
-            {/* Tabla Principal */}
-            <div className="bg-white border text-left border-zinc-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                <div className="p-4 border-b border-zinc-100 bg-zinc-50 rounded-t-xl flex justify-between items-center">
-                    <h2 className="font-semibold text-zinc-800 flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-zinc-400" />
-                        {selectedDate === new Date().toISOString().split('T')[0] ? t('records_today') : `${t('records_of')} ${selectedDate}`}
-                    </h2>
+            {/* Tabla de Registros de Checadas */}
+            <div className="glass-card rounded-3xl border border-[var(--border-color)] overflow-hidden shadow-xl">
+                <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between">
+                    <h3 className="text-sm font-black text-[var(--text-main)] uppercase tracking-wider flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-indigo-400" />
+                        <span>Monitoreo de Asistencia en Tiempo Real</span>
+                    </h3>
+                    <span className="text-[10px] font-bold text-[var(--text-muted)]">
+                        {checadas.length} Registros en {selectedDate}
+                    </span>
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full whitespace-nowrap">
+                    <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-white border-b border-zinc-100 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                                <th className="px-6 py-4 text-left">{t('th_time')}</th>
-                                <th className="px-6 py-4 text-left">{t('th_employee')}</th>
-                                <th className="px-6 py-4 text-left">{t('th_type')}</th>
-                                <th className="px-6 py-4 text-left">{t('th_punctuality')}</th>
-                                <th className="px-6 py-4 text-left">{t('th_origin')}</th>
-                                <th className="px-6 py-4 text-right">{t('actions')}</th>
+                            <tr className="border-b border-[var(--border-color)] bg-white/2 text-[10px] font-black text-[var(--text-muted)] uppercase tracking-wider">
+                                <th className="p-4">Empleado</th>
+                                <th className="p-4">Tipo Evento</th>
+                                <th className="p-4">Hora Checada</th>
+                                <th className="p-4">Origen</th>
+                                <th className="p-4">Puntualidad</th>
+                                <th className="p-4 text-right">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-zinc-50">
-                            {loading && <tr><td colSpan={5} className="p-8 text-center text-sm text-zinc-400">{t('loading_live_data')}</td></tr>}
-                            {!loading && checadas.length === 0 ? (
+                        <tbody className="divide-y divide-[var(--border-color)] text-xs font-semibold">
+                            {loading ? (
                                 <tr>
-                                    <td colSpan={5} className="p-10 text-center text-zinc-400">
-                                        <div className="flex flex-col items-center">
-                                            <AlertCircle className="w-10 h-10 text-zinc-300 mb-3" />
-                                            <p className="font-medium text-sm">{t('no_records_today')}</p>
-                                        </div>
+                                    <td colSpan={6} className="py-16 text-center text-[var(--text-muted)] font-black uppercase tracking-widest animate-pulse">
+                                        Cargando asistencias en tiempo real...
                                     </td>
                                 </tr>
-                            ) : null}
-                            {checadas.map(c => {
-                                const isEntrada = c.tipo_checada.includes('ENTRADA') || c.tipo_checada.includes('REGRESO')
-
-                                return (
-                                    <tr key={c.id} className="hover:bg-zinc-50/50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="text-sm font-bold text-zinc-900 font-mono tracking-tight">{formatHora(c.timestamp_checada)}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-sm font-bold text-zinc-900">{c.empleados?.nombre} {c.empleados?.apellido_paterno}</div>
-                                            <div className="text-xs text-zinc-500 font-medium">#{c.empleados?.numero_empleado}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center space-x-2">
-                                                {isEntrada ? <LogIn className="w-4 h-4 text-green-500" /> : <LogOut className="w-4 h-4 text-red-500" />}
-                                                <span className="text-xs font-bold text-zinc-700">{c.tipo_checada.replace('_', ' ')}</span>
+                            ) : checadas.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="py-16 text-center text-[var(--text-muted)] font-bold">
+                                        No hay registros de checadas para la fecha seleccionada ({selectedDate}).
+                                    </td>
+                                </tr>
+                            ) : (
+                                checadas.map(r => (
+                                    <tr key={r.id} className="hover:bg-indigo-500/5 transition-colors">
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-xl bg-indigo-600/20 text-indigo-400 font-black text-xs flex items-center justify-center">
+                                                    {r.empleados?.nombre ? r.empleados.nombre.charAt(0) : 'E'}
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-[var(--text-main)]">
+                                                        {r.empleados?.nombre} {r.empleados?.apellido_paterno}
+                                                    </p>
+                                                    <p className="text-[10px] text-[var(--text-muted)]">#{r.empleados?.numero_empleado}</p>
+                                                </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${c.estatus_puntualidad === 'PUNTUAL' ? 'bg-green-50 text-green-700 border-green-200' : c.estatus_puntualidad === 'FALTA' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                                                {c.estatus_puntualidad} {c.retardo_minutos > 0 ? ` (+${c.retardo_minutos}m)` : ''}
+                                        <td className="p-4">
+                                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-500/10 border border-[var(--border-color)] text-indigo-400">
+                                                {r.tipo_checada}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col gap-1">
-                                                <div className="text-xs font-semibold text-zinc-500 uppercase tracking-widest flex items-center gap-1">
-                                                    {c.es_manual ? (
-                                                        <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-[9px] border border-amber-200">MANUAL</span>
-                                                    ) : (
-                                                        <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded text-[9px] border border-zinc-200">SISTEMA</span>
-                                                    )}
-                                                    {c.metodo_identificacion?.replace('_', ' ')}
-                                                </div>
-                                                {c.id_permiso && (
-                                                    <div className="text-[10px] text-indigo-600 font-bold tracking-tight uppercase bg-indigo-50 inline-block px-1.5 py-0.5 rounded border border-indigo-100 w-fit">
-                                                        AUTORIZADO: {c.permisos_autorizados?.codigo}
-                                                    </div>
-                                                )}
-                                            </div>
+                                        <td className="p-4 font-black text-[var(--text-main)]">
+                                            {formatHora(r.timestamp_checada)}
                                         </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <Link
-                                                    href={`/asistencia/manual?edit=${c.id}`}
-                                                    className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                                    title="Editar"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </Link>
-                                                <button
-                                                    onClick={() => eliminarChecada(c.id)}
-                                                    className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                    title="Eliminar"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
+                                        <td className="p-4 text-[10px] text-[var(--text-muted)] uppercase font-bold">
+                                            {r.source || 'web_my_work'}
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={cn(
+                                                "px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border",
+                                                r.estatus_puntualidad === 'RETARDO' ? "bg-amber-500/10 text-amber-400 border-amber-500/30" :
+                                                r.estatus_puntualidad === 'FALTA' ? "bg-red-500/10 text-red-400 border-red-500/30" :
+                                                "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                            )}>
+                                                {r.estatus_puntualidad || 'PUNTUAL'}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <button
+                                                onClick={() => eliminarChecada(r)}
+                                                className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
+                                                title="Eliminar Registro"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
                                         </td>
                                     </tr>
-                                )
-                            })}
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>

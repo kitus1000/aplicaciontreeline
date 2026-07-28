@@ -24,6 +24,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Briefcase,
   ExternalLink,
   Sparkles,
   Bot,
@@ -55,6 +56,8 @@ export default function MiTrabajoProPage() {
   const [showCamera, setShowCamera] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [showCloseAuditModal, setShowCloseAuditModal] = useState(false)
+  const [projectsList, setProjectsList] = useState<any[]>([])
+  const [selectedProject, setSelectedProject] = useState<string>('')
   
   // New Activity Form
   const [newDesc, setNewDesc] = useState('')
@@ -101,6 +104,13 @@ export default function MiTrabajoProPage() {
       const start = startOfWeek(currentWeek, { weekStartsOn: 1 })
       const end = addDays(start, 6)
       const dateStr = format(selectedDate, 'yyyy-MM-dd')
+
+      // Fetch active projects for selection
+      const { data: projsData } = await supabase.from('proyectos').select('*').eq('is_deleted', false)
+      if (projsData && projsData.length > 0) {
+        setProjectsList(projsData)
+        if (!selectedProject) setSelectedProject(projsData[0].nombre)
+      }
 
       // 1. Fetch weekly statuses
       const { data: statusData } = await supabase
@@ -365,17 +375,36 @@ export default function MiTrabajoProPage() {
           </p>
         </div>
 
-        {employee && (
-          <div className="flex items-center gap-3 p-2.5 rounded-2xl glass-card border border-[var(--border-color)] shadow-md">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-sm">
-              {employee.nombre?.charAt(0)}
+        <div className="flex flex-wrap items-center gap-3">
+          {projectsList.length > 0 && (
+            <div className="flex items-center gap-2 p-2.5 rounded-2xl glass-card border border-indigo-500/30 shadow-md">
+              <Briefcase className="w-4 h-4 text-indigo-400 shrink-0" />
+              <select
+                value={selectedProject}
+                onChange={(e) => setSelectedProject(e.target.value)}
+                className="bg-transparent text-xs font-black text-[var(--text-main)] outline-none cursor-pointer pr-2"
+              >
+                {projectsList.map((p) => (
+                  <option key={p.id_proyecto} value={p.nombre} className="bg-slate-900 text-white font-bold">
+                    🏗️ Obra: {p.nombre}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div>
-              <p className="text-xs font-bold text-[var(--text-main)] leading-tight">{userName}</p>
-              <p className="text-[10px] font-semibold text-indigo-400">#{employee.numero_empleado}</p>
+          )}
+
+          {employee && (
+            <div className="flex items-center gap-3 p-2.5 rounded-2xl glass-card border border-[var(--border-color)] shadow-md">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-sm">
+                {employee.nombre?.charAt(0)}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-[var(--text-main)] leading-tight">{userName}</p>
+                <p className="text-[10px] font-semibold text-indigo-400">#{employee.numero_empleado}</p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Feedback Toast */}
