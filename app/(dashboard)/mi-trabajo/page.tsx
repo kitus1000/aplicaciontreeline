@@ -7,62 +7,65 @@ import { useImpersonation } from '@/context/ImpersonationContext'
 import { 
   Play, 
   Coffee, 
-  LogOut, 
-  Clock, 
-  Calendar as CalendarIcon, 
+  RotateCcw, 
+  Square, 
   CheckCircle2, 
-  AlertCircle, 
-  Zap, 
   Camera, 
   Upload, 
-  ChevronLeft, 
-  ChevronRight,
-  Plus,
-  Trash2,
+  Plus, 
+  Calendar as CalendarIcon, 
+  Clock, 
+  AlertCircle,
   FileText,
-  User as UserIcon,
-  Save,
-  RefreshCw,
-  X,
+  User,
+  Trash2,
   Edit2,
   Check,
-  RotateCcw
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  Sparkles,
+  Bot,
+  HelpCircle,
+  ShieldAlert
 } from 'lucide-react'
-import { cn } from '@/utils/cn'
-import { format, startOfWeek, addDays, isSameDay, subWeeks, addWeeks } from 'date-fns'
+import { format, startOfWeek, addDays, isSameDay } from 'date-fns'
 import { es, enUS } from 'date-fns/locale'
+import { cn } from '@/utils/cn'
 import WebCamera from '@/components/WebCamera'
 
-export default function MyWorkTodayPage() {
+export default function MiTrabajoProPage() {
   const { t, language } = useI18n()
-  const [loading, setLoading] = useState(true)
+  const { impersonatedEmployee } = useImpersonation()
+
   const [employee, setEmployee] = useState<any>(null)
   const [userName, setUserName] = useState<string>('')
+  const [loading, setLoading] = useState(true)
   const [currentWeek, setCurrentWeek] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
-  const [workdays, setWorkdays] = useState<any[]>([])
+  
+  // Workday Data
   const [events, setEvents] = useState<any[]>([])
   const [activities, setActivities] = useState<any[]>([])
+  const [weeklyStatus, setWeeklyStatus] = useState<Record<string, string>>({})
+  
+  // UI States
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
-  const [editingEventId, setEditingEventId] = useState<string | null>(null)
-  const [editTimeValue, setEditTimeValue] = useState<string>('')
-
+  const [showCamera, setShowCamera] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [showCloseAuditModal, setShowCloseAuditModal] = useState(false)
+  
+  // New Activity Form
+  const [newDesc, setNewDesc] = useState('')
+  const [newHours, setNewHours] = useState('1')
+  
+  // Editing Activity Form
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null)
   const [editActivityDesc, setEditActivityDesc] = useState('')
   const [editActivityHours, setEditActivityHours] = useState('')
 
-  const [activityDesc, setActivityDesc] = useState('')
-  const [activityHours, setActivityHours] = useState('')
-  const [activityFiles, setActivityFiles] = useState<File[]>([])
-  const [uploadingActivity, setUploadingActivity] = useState(false)
-  const [uploadingEvidence, setUploadingEvidence] = useState(false)
-  const [showCamera, setShowCamera] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  
   const locale = language === 'es' ? es : enUS
-
-  const { impersonatedEmployee } = useImpersonation()
 
   useEffect(() => {
     fetchData()
@@ -74,7 +77,6 @@ export default function MyWorkTodayPage() {
       let empData: any = null
 
       if (impersonatedEmployee) {
-        // Mode Impersonated Worker View
         empData = impersonatedEmployee
         setUserName(`${impersonatedEmployee.nombre} ${impersonatedEmployee.apellido_paterno}`)
       } else {
@@ -107,16 +109,22 @@ export default function MyWorkTodayPage() {
         .eq('employee_id', empData.id_empleado)
         .gte('date', format(start, 'yyyy-MM-dd'))
         .lte('date', format(end, 'yyyy-MM-dd'))
-      setWorkdays(statusData || [])
 
-      // 2. Fetch events for the selected day
-      const { data: eventsData } = await supabase
+      const statusMap: Record<string, string> = {}
+      statusData?.forEach(s => {
+        statusMap[s.date] = s.status
+      })
+      setWeeklyStatus(statusMap)
+
+      // 2. Fetch events for selected day
+      const { data: evsData } = await supabase
         .from('workday_events')
         .select('*')
         .eq('employee_id', empData.id_empleado)
         .eq('date', dateStr)
         .order('event_time', { ascending: true })
-      setEvents(eventsData || [])
+
+      setEvents(evsData || [])
 
       // 3. Fetch activities
       const { data: actsData } = await supabase
@@ -133,30 +141,46 @@ export default function MyWorkTodayPage() {
     }
   }
 
-  const handleCerrarDia = async (forceWithoutPhoto = false) => {
+  // Handle Clocking Event via API
+  const handleClockingEvent = async (tipo: string) => {
     if (!employee) return
+    setLoading(true)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/checadas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_empleado_token: employee.numero_empleado,
+          tipo_checada: tipo,
+          source: 'web_my_work_pro'
+        })
+      })
+      const data = await res.json()
+      if (!data.ok && data.error_code !== 'ACCESO_DENEGADO_FALTA') {
+        throw new Error(data.mensaje || 'Error al registrar evento')
+      }
 
-    // Verify photo evidence
-    const hasPhotoEvidence = activities.some(act => Boolean(act.storage_url))
-
-    if (!hasPhotoEvidence && !forceWithoutPhoto) {
-      const wantToUpload = confirm(
-        language === 'es'
-          ? '📷 ATENCIÓN: No has adjuntado ninguna fotografía de evidencia para el día de hoy.\n\n¿Deseas cerrar el día de todas formas sin fotos de evidencia?'
-          : '📷 ATTENTION: You have not attached any photo evidence for today.\n\nDo you want to close the day anyway without photo evidence?'
-      )
-      if (!wantToUpload) return
+      setMessage({ 
+        type: 'success', 
+        text: language === 'es' ? '¡Hora registrada correctamente!' : 'Time logged successfully!' 
+      })
+      fetchData()
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Error en checada' })
+    } finally {
+      setLoading(false)
     }
+  }
 
-    if (!confirm(
-      language === 'es'
-        ? '¿Cerrar el día de hoy y enviarlo para autorización ejecutiva?'
-        : 'Close today and submit for executive authorization?'
-    )) return
-
+  // Execute Final Day Closure
+  const executeCerrarDia = async () => {
+    if (!employee) return
+    setShowCloseAuditModal(false)
+    setLoading(true)
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd')
-      const res = await fetch('/api/checadas', {
+      await fetch('/api/checadas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -165,7 +189,7 @@ export default function MyWorkTodayPage() {
           source: 'web_my_work_pro'
         })
       })
-      // Even if checadas fails, try to upsert the approval status
+      
       const { error } = await supabase.from('workday_approval_status').upsert({
         employee_id: employee.id_empleado,
         date: dateStr,
@@ -182,778 +206,630 @@ export default function MyWorkTodayPage() {
       fetchData()
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message || 'Error al cerrar el día.' })
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleDeleteEvent = async (id: string) => {
-    if (!confirm('¿Seguro que deseas eliminar este registro de asistencia?')) return
-    try {
-      const res = await fetch('/api/delete-event', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id })
-      })
-      const result = await res.json()
-      if (!res.ok || !result.ok) throw new Error(result.message || 'Error desconocido al eliminar.')
-      
-      setMessage({ type: 'success', text: 'Registro eliminado correctamente.' })
-      fetchData()
-    } catch (e: any) {
-      setMessage({ type: 'error', text: 'Error al eliminar: ' + e.message })
-    }
+  // File & Camera Upload Handlers
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) await uploadPhotoFile(file)
   }
 
-  const handleSaveEdit = async (ev: any) => {
-    if (!editTimeValue) return
-    try {
-      // Preserve the original date, just change the time
-      const originalDate = new Date(ev.event_time)
-      const [hours, minutes] = editTimeValue.split(':')
-      const newDate = new Date(originalDate)
-      newDate.setHours(parseInt(hours), parseInt(minutes), 0, 0)
-      
-      const res = await fetch('/api/update-event', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: ev.id, event_time: newDate.toISOString() })
-      })
-      const result = await res.json()
-      if (!res.ok || !result.ok) throw new Error(result.message || 'Error desconocido al actualizar.')
-      
-      setEditingEventId(null)
-      setMessage({ type: 'success', text: 'Registro actualizado correctamente.' })
-      fetchData()
-    } catch (e: any) {
-      setMessage({ type: 'error', text: 'Error al actualizar: ' + e.message })
-    }
-  }
-
-  const handleAttendance = async (type: string) => {
-    if (!employee) {
-      setMessage({ type: 'error', text: 'Debes estar registrado como Empleado para registrar asistencia.' })
-      return
-    }
-    try {
-      const res = await fetch('/api/checadas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id_empleado_token: employee.numero_empleado,
-          tipo_checada: type,
-          source: 'web_my_work_pro'
-        })
-      })
-      const result = await res.json()
-      if (result.ok) {
-        setMessage({ type: 'success', text: t('success_attendance') })
-        fetchData()
-      } else {
-        setMessage({ type: 'error', text: result.mensaje || t('error') })
-      }
-    } catch (e) {
-      setMessage({ type: 'error', text: t('error') })
-    }
-  }
-
-  const handleSubmitDescription = async () => {
-    if (!employee) {
-      setMessage({ type: 'error', text: 'Requiere cuenta de empleado activa para capturar actividades.' })
-      return
-    }
-    if (!activityDesc || !activityHours) {
-      setMessage({ type: 'error', text: 'El resumen y las horas dedicadas no pueden estar vacíos.' })
-      return
-    }
-    
-    setUploadingActivity(true)
+  const uploadPhotoFile = async (file: File) => {
+    if (!employee) return
+    setUploadingPhoto(true)
+    setMessage(null)
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd')
+      const fileName = `${employee.id_empleado}/${dateStr}_${Date.now()}.jpg`
+      
+      const { data: uploadData, error: uploadErr } = await supabase
+        .storage
+        .from('evidencias')
+        .upload(fileName, file, { contentType: 'image/jpeg', upsert: true })
 
-      const res = await fetch('/api/save-activity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          employee_id: employee.id_empleado,
-          date: dateStr,
-          activity_name: activityDesc.substring(0, 100),
-          activity_description: activityDesc,
-          hours_dedicated: parseFloat(activityHours)
-        })
+      if (uploadErr) throw uploadErr
+
+      const { data: { publicUrl } } = supabase.storage.from('evidencias').getPublicUrl(fileName)
+
+      // Save as workday_activity
+      const { error: dbErr } = await supabase.from('workday_activities').insert({
+        employee_id: employee.id_empleado,
+        date: dateStr,
+        activity_name: 'Evidencia Fotográfica de Jornada',
+        activity_description: `Foto de avance cargada el ${format(new Date(), 'HH:mm')}`,
+        hours_dedicated: 0,
+        storage_url: publicUrl
       })
-      const result = await res.json()
-      if (!res.ok || !result.ok) throw new Error(result.message || 'Error al guardar en BD')
 
-      setMessage({ type: 'success', text: '¡Actividades registradas exitosamente!' })
-      setActivityDesc('')
-      setActivityHours('')
+      if (dbErr) throw dbErr
+
+      setMessage({ 
+        type: 'success', 
+        text: language === 'es' ? '¡Fotografía adjuntada con éxito!' : 'Photo attached successfully!' 
+      })
       fetchData()
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al guardar la actividad' })
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Error al subir foto' })
     } finally {
-      setUploadingActivity(false)
+      setUploadingPhoto(false)
+      setShowCamera(false)
     }
   }
 
-  const handleSubmitEvidence = async () => {
-    if (!employee) {
-      setMessage({ type: 'error', text: 'Requiere cuenta de empleado para subir evidencias.' })
-      return
-    }
-    if (activityFiles.length === 0) {
-      setMessage({ type: 'error', text: 'No se han seleccionado fotografías.' })
-      return
-    }
-    
-    setUploadingEvidence(true)
+  // Add Manual Activity
+  const addActivity = async () => {
+    if (!employee || !newDesc.trim()) return
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd')
-      const folderDate = format(selectedDate, 'dd.MM.yyyy')
-      const employeeName = `${employee.nombre} ${employee.apellido_paterno}`.trim()
-      
-      const uploadPromises = activityFiles.map(async (file) => {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('employeeId', employee.id_empleado)
-        formData.append('employeeName', employeeName)
-        formData.append('dateStr', dateStr)
-        formData.append('folderDate', folderDate)
-
-        const res = await fetch('/api/upload-evidence', {
-          method: 'POST',
-          body: formData
-        })
-        const result = await res.json()
-        if (!res.ok) throw new Error(result.message || 'Error al subir')
-        return result.url
+      const { error } = await supabase.from('workday_activities').insert({
+        employee_id: employee.id_empleado,
+        date: dateStr,
+        activity_name: newDesc.trim(),
+        activity_description: newDesc.trim(),
+        hours_dedicated: parseFloat(newHours) || 1
       })
-
-      await Promise.all(uploadPromises)
-
-      setMessage({ type: 'success', text: `¡${activityFiles.length} fotografías subidas exitosamente!` })
-      setActivityFiles([])
+      if (error) throw error
+      setNewDesc('')
+      setNewHours('1')
       fetchData()
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Error al subir las evidencias' })
-    } finally {
-      setUploadingEvidence(false)
-    }
-  }
-
-  const deleteActivity = async (id: string) => {
-    if (!confirm('¿Eliminar esta actividad? Esta acción no se puede deshacer.')) return
-    const res = await fetch('/api/delete-activity', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    })
-    const result = await res.json()
-    if (result.ok) {
-      setMessage({ type: 'success', text: 'Actividad eliminada.' })
-      fetchData()
-    } else {
-      setMessage({ type: 'error', text: 'Error al eliminar: ' + result.message })
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message })
     }
   }
 
   const saveEditedActivity = async (id: string) => {
     try {
-      const res = await fetch('/api/update-activity', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id,
-          activity_name: editActivityDesc.substring(0, 100),
-          activity_description: editActivityDesc,
-          hours_dedicated: parseFloat(editActivityHours)
+      const { error } = await supabase
+        .from('workday_activities')
+        .update({
+          activity_name: editActivityDesc.trim(),
+          activity_description: editActivityDesc.trim(),
+          hours_dedicated: parseFloat(editActivityHours) || 0
         })
-      })
-      const result = await res.json()
-      if (!res.ok || !result.ok) throw new Error(result.message || 'Error al actualizar')
-      
-      setMessage({ type: 'success', text: 'Actividad actualizada exitosamente.' })
+        .eq('id', id)
+
+      if (error) throw error
       setEditingActivityId(null)
       fetchData()
-    } catch (e: any) {
-      setMessage({ type: 'error', text: 'Error al actualizar: ' + e.message })
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message })
     }
   }
 
-  const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(startOfWeek(currentWeek, { weekStartsOn: 1 }), i))
-  const selectedDayStatus = workdays.find(w => w.date === format(selectedDate, 'yyyy-MM-dd'))?.status || 'none'
+  const deleteActivity = async (id: string) => {
+    if (!confirm('¿Eliminar esta actividad o fotografía?')) return
+    try {
+      await supabase.from('workday_activities').delete().eq('id', id)
+      fetchData()
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message })
+    }
+  }
+
+  // Helpers for 4-Step Stepper State
+  const entradaEv = events.find(e => e.event_type === 'ENTRADA' || e.event_type === 'CHECK_IN')
+  const salidaComerEv = events.find(e => e.event_type === 'SALIDA_COMER' || e.event_type === 'COMIDA_SALIDA')
+  const entradaComerEv = events.find(e => e.event_type === 'ENTRADA_COMER' || e.event_type === 'COMIDA_REGRESO')
+  const salidaFinalEv = events.find(e => e.event_type === 'SALIDA_FINAL' || e.event_type === 'SALIDA')
+  
+  const selectedDayStr = format(selectedDate, 'yyyy-MM-dd')
+  const selectedDayStatus = weeklyStatus[selectedDayStr] || 'none'
+  const photosList = activities.filter(a => Boolean(a.storage_url))
+
+  // Calculated Workday Hours
+  let calculatedHours = 0
+  if (entradaEv) {
+    const startTime = new Date(entradaEv.event_time).getTime()
+    const endTime = salidaFinalEv ? new Date(salidaFinalEv.event_time).getTime() : new Date().getTime()
+    const diffMs = endTime - startTime
+    calculatedHours = Math.max(0, Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10)
+  }
+
+  // Week Days Array
+  const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 })
+  const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i))
 
   return (
-    <div className="max-w-4xl mx-auto pb-20 space-y-8 page-transition">
-      {/* Header & Branding */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 max-w-5xl mx-auto page-transition px-2 sm:px-0 pb-16">
+      
+      {/* Header Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--border-color)] pb-6">
         <div>
-          <h1 className="text-4xl font-black text-white tracking-tighter uppercase italic">
-            Worktrack <span className="text-indigo-400">PRO</span>
+          <h1 className="text-3xl sm:text-4xl font-black text-[var(--text-main)] tracking-tight">
+            {t('my_work_title')} <span className="text-indigo-400">PRO</span>
           </h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em] mt-1">{t('menu_my_work_today')}</p>
+          <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mt-1">
+            Gestión de Jornada Laboral y Checadas en Tiempo Real
+          </p>
         </div>
-        <div className="text-right">
-           <p className="text-white font-black text-lg uppercase tracking-tight">{employee?.nombre} {employee?.apellido_paterno}</p>
-           <p className="text-indigo-400 text-[10px] font-bold uppercase tracking-widest">{employee?.codigo_empleado}</p>
-        </div>
+
+        {employee && (
+          <div className="flex items-center gap-3 p-2.5 rounded-2xl glass-card border border-[var(--border-color)] shadow-md">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-sm">
+              {employee.nombre?.charAt(0)}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-[var(--text-main)] leading-tight">{userName}</p>
+              <p className="text-[10px] font-semibold text-indigo-400">#{employee.numero_empleado}</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Week Vision Calendar */}
-      <div className="glass-dark rounded-3xl p-6 border border-slate-800 shadow-2xl">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-             <button onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))} className="p-2 hover:bg-slate-800 rounded-xl transition-colors text-slate-400"><ChevronLeft className="w-5 h-5" /></button>
-             <h2 className="text-sm font-black text-white uppercase tracking-widest flex items-center">
-                <CalendarIcon className="w-4 h-4 mr-2 text-indigo-400" />
-                {t('week_of')} {format(startOfWeek(currentWeek, { weekStartsOn: 1 }), 'dd/MM/yyyy')}
-             </h2>
-             <button onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))} className="p-2 hover:bg-slate-800 rounded-xl transition-colors text-slate-400"><ChevronRight className="w-5 h-5" /></button>
+      {/* Feedback Toast */}
+      {message && (
+        <div className={cn(
+          "p-4 rounded-2xl flex items-center justify-between border text-xs font-bold animate-in fade-in",
+          message.type === 'success' ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-red-500/10 border-red-500/30 text-red-400"
+        )}>
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            <span>{message.text}</span>
           </div>
-          <button onClick={() => { setCurrentWeek(new Date()); setSelectedDate(new Date()) }} className="text-[10px] font-black text-indigo-400 uppercase tracking-widest hover:text-white transition-colors">{t('today')}</button>
+          <button onClick={() => setMessage(null)} className="hover:opacity-75">✖</button>
+        </div>
+      )}
+
+      {/* Week Day Selector Carousel */}
+      <div className="glass-card rounded-3xl p-4 border border-[var(--border-color)] shadow-xl space-y-3">
+        <div className="flex items-center justify-between">
+          <button 
+            onClick={() => setCurrentWeek(addDays(currentWeek, -7))}
+            className="p-2 rounded-xl glass hover:border-indigo-500/40 text-[var(--text-main)] transition-all"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-xs font-black uppercase tracking-wider text-indigo-400">
+            Semana del {format(weekStart, 'dd MMMM yyyy', { locale })}
+          </span>
+          <button 
+            onClick={() => setCurrentWeek(addDays(currentWeek, 7))}
+            className="p-2 rounded-xl glass hover:border-indigo-500/40 text-[var(--text-main)] transition-all"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
 
-        <div className="grid grid-cols-7 gap-3">
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-3">
           {weekDays.map((day) => {
-            const status = workdays.find(w => w.date === format(day, 'yyyy-MM-dd'))?.status || 'none'
+            const dayStr = format(day, 'yyyy-MM-dd')
             const isSelected = isSameDay(day, selectedDate)
-            const isToday = isSameDay(day, new Date())
-            
+            const st = weeklyStatus[dayStr]
+
             return (
-              <button 
-                key={day.toString()} 
+              <button
+                key={dayStr}
                 onClick={() => setSelectedDate(day)}
                 className={cn(
-                  "flex flex-col items-center p-3 rounded-2xl border transition-all relative overflow-hidden group",
-                  isSelected ? "bg-indigo-600 border-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.3)] scale-105 z-10" : "bg-slate-800/30 border-slate-700 hover:border-slate-500",
-                  isToday && !isSelected && "ring-1 ring-indigo-500/50"
+                  "p-2.5 sm:p-3 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 border text-center relative",
+                  isSelected 
+                    ? "bg-indigo-600 text-white border-indigo-400 shadow-lg shadow-indigo-600/40 scale-105" 
+                    : "glass border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-main)]"
                 )}
               >
-                <span className={cn("text-[9px] font-black uppercase tracking-tighter mb-1", isSelected ? "text-indigo-100" : "text-slate-500")}>{format(day, 'EEE', { locale })}</span>
-                <span className={cn("text-lg font-black", isSelected ? "text-white" : "text-slate-200")}>{format(day, 'dd')}</span>
-                <div className={cn(
-                  "mt-2 w-full h-1 rounded-full",
-                  status === 'authorized' ? "bg-emerald-400" : 
-                  status === 'rejected' ? "bg-red-400" : 
-                  status === 'Enviado' ? "bg-indigo-400" : "bg-slate-700"
-                )}></div>
+                <span className="text-[9px] font-black uppercase tracking-wider opacity-80">
+                  {format(day, 'EEE', { locale })}
+                </span>
+                <span className="text-sm sm:text-base font-black mt-0.5">
+                  {format(day, 'dd')}
+                </span>
+
+                {/* Status Dot */}
+                {st === 'Enviado' && <span className="w-2 h-2 rounded-full bg-amber-400 mt-1 shadow-sm" title="Enviado a Autorización" />}
+                {st === 'Autorizado' && <span className="w-2 h-2 rounded-full bg-emerald-400 mt-1 shadow-sm" title="Autorizado" />}
               </button>
             )
           })}
         </div>
       </div>
 
-      {message && (
-        <div className={cn(
-          "p-4 rounded-2xl flex items-center space-x-3 border-2 animate-in slide-in-from-top-4 glass",
-          message.type === 'success' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/5" : "border-red-500/30 text-red-400 bg-red-500/5"
-        )}>
-           {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-           <p className="font-bold uppercase tracking-tight text-xs flex-1">{message.text}</p>
-           <button onClick={() => setMessage(null)} className="p-1 hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4" /></button>
-        </div>
-      )}
-
-      <div className="space-y-8 mt-8">
+      {/* ⚡ STEPPER GUIADO PASO A PASO EN 4 FASES DE LA JORNADA */}
+      <div className="cyber-card rounded-3xl p-6 border border-[var(--border-color)] shadow-2xl space-y-6">
         
-        {/* Indicators row */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border-color)] pb-4">
+          <div>
+            <h3 className="text-lg font-black text-[var(--text-main)] uppercase tracking-wide flex items-center gap-2">
+              <span>Proceso Guiado de Jornada</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-bold text-[10px] border border-indigo-500/20">
+                Paso a Paso
+              </span>
+            </h3>
+            <p className="text-xs font-semibold text-[var(--text-muted)] mt-0.5">
+              Registra cada etapa cronológica de tu turno de hoy
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border",
+              selectedDayStatus === 'Enviado' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+              selectedDayStatus === 'Autorizado' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+              'bg-slate-500/10 text-[var(--text-muted)] border-[var(--border-color)]'
+            )}>
+              {selectedDayStatus === 'Enviado' ? '⏳ Día Enviado' :
+               selectedDayStatus === 'Autorizado' ? '✅ Autorizado' :
+               'En Curso'}
+            </span>
+          </div>
+        </div>
+
+        {/* 4 Steps Timeline Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          {/* Paso 1: Entrada General */}
           <div className={cn(
-            "rounded-3xl p-8 border shadow-2xl relative overflow-hidden flex flex-col justify-between transition-all duration-500 lg:col-span-1 min-h-[250px]",
-            selectedDayStatus === 'authorized' ? "bg-emerald-600 border-emerald-400" :
-            selectedDayStatus === 'rejected' ? "bg-red-600 border-red-400" :
-            selectedDayStatus === 'Enviado' ? "bg-indigo-600 border-indigo-400" : "glass-dark border-slate-800"
+            "p-4 rounded-2xl border transition-all duration-300 flex flex-col justify-between space-y-3",
+            entradaEv ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "glass border-[var(--border-color)] text-[var(--text-main)]"
           )}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Paso 1</span>
+              {entradaEv ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <Play className="w-5 h-5 text-indigo-400" />}
+            </div>
             <div>
-               <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center mb-6 backdrop-blur-md border border-white/20">
-                  {selectedDayStatus === 'authorized' ? <CheckCircle2 className="w-8 h-8" /> : 
-                   selectedDayStatus === 'rejected' ? <AlertCircle className="w-8 h-8" /> : <Clock className="w-8 h-8" />}
-               </div>
-               <h3 className="text-2xl font-black uppercase tracking-tight mb-2">{t('daily_status')}</h3>
-               <p className="text-white/70 text-sm font-bold uppercase tracking-widest">
-                  {t(`status_${selectedDayStatus}` as any)}
-               </p>
-            </div>
-            
-            {(selectedDayStatus === 'draft' || selectedDayStatus === 'none') && events.length >= 2 && (
-              <button 
-                onClick={() => handleCerrarDia(false)}
-                className="w-full bg-white text-indigo-600 font-black py-4 rounded-2xl uppercase text-[10px] tracking-[0.3em] shadow-xl hover:bg-slate-50 transition-all active:scale-95 mt-6 flex items-center justify-center gap-2"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                {t('send_close_day')}
-              </button>
-            )}
-          </div>
-
-          {/* Interactive Step-by-Step Guided Workday Process */}
-          <div className="glass-card shadow-2xl rounded-3xl p-6 sm:p-8 border border-[var(--border-color)] relative overflow-hidden lg:col-span-3 space-y-6">
-             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[var(--border-color)] pb-4 gap-2">
-                <div>
-                  <h3 className="text-base font-black text-[var(--text-main)] uppercase tracking-tight flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-indigo-400 animate-pulse" />
-                    {t('interactive_attendance')} (Proceso Guiado Paso a Paso)
-                  </h3>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    Registra tu horario en 4 etapas sencillas (Entrada ➔ Salida a Comer ➔ Regreso de Comer ➔ Salida Final)
-                  </p>
-                </div>
-                <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-wider rounded-full border border-indigo-500/20 w-fit">
-                  Paso a Paso ⚡
-                </span>
-             </div>
-
-             {/* Process Stepper */}
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                  { step: 1, type: 'ENTRADA', label: t('entrada'), sublabel: 'Inicio de Turno', icon: Play, color: 'indigo' },
-                  { step: 2, type: 'SALIDA_COMER', label: t('comida_out'), sublabel: 'Pausa Alimento', icon: Coffee, color: 'amber' },
-                  { step: 3, type: 'ENTRADA_COMER', label: t('comida_in'), sublabel: 'Retorno a Labores', icon: Zap, color: 'cyan' },
-                  { step: 4, type: 'SALIDA_FINAL', label: t('salida_final'), sublabel: 'Cierre de Jornada', icon: LogOut, color: 'rose' },
-                ].map((stepItem) => {
-                  const ev = events.find((e: any) => {
-                    if (stepItem.type === 'ENTRADA') return e.event_type === 'ENTRADA' || e.event_type === 'CHECK_IN'
-                    if (stepItem.type === 'SALIDA_COMER') return e.event_type === 'SALIDA_COMER' || e.event_type === 'COMIDA_SALIDA'
-                    if (stepItem.type === 'ENTRADA_COMER') return e.event_type === 'ENTRADA_COMER' || e.event_type === 'COMIDA_REGRESO'
-                    if (stepItem.type === 'SALIDA_FINAL') return e.event_type === 'SALIDA_FINAL' || e.event_type === 'SALIDA'
-                    return e.event_type === stepItem.type
-                  })
-
-                  const isDone = Boolean(ev)
-
-                  return (
-                    <div 
-                      key={stepItem.type}
-                      className={cn(
-                        "cyber-card p-5 rounded-2xl border transition-all flex flex-col justify-between min-h-[190px] relative group",
-                        isDone 
-                          ? "bg-emerald-500/10 border-emerald-500/30" 
-                          : "bg-[var(--bg-card)] border-[var(--border-color)] hover:border-indigo-500/40"
-                      )}
-                    >
-                      {/* Step Badge Number */}
-                      <div className="flex items-center justify-between mb-3">
-                        <span className={cn(
-                          "w-7 h-7 rounded-full text-xs font-black flex items-center justify-center border",
-                          isDone 
-                            ? "bg-emerald-500 text-white border-emerald-400" 
-                            : "bg-indigo-500/20 text-indigo-400 border-indigo-500/30"
-                        )}>
-                          {isDone ? <Check className="w-4 h-4" /> : stepItem.step}
-                        </span>
-                        <span className="text-[9px] font-black uppercase tracking-wider text-[var(--text-muted)]">
-                          {isDone ? 'COMPLETADO' : `PASO ${stepItem.step}`}
-                        </span>
-                      </div>
-
-                      {/* Icon & Labels */}
-                      <div className="space-y-1 my-2">
-                        <div className="flex items-center gap-2">
-                          <stepItem.icon className={cn(
-                            "w-5 h-5",
-                            isDone ? "text-emerald-400" : "text-indigo-400"
-                          )} />
-                          <h4 className="text-sm font-black text-[var(--text-main)] uppercase tracking-tight">
-                            {stepItem.label}
-                          </h4>
-                        </div>
-                        <p className="text-[10px] font-semibold text-[var(--text-muted)]">{stepItem.sublabel}</p>
-                      </div>
-
-                      {/* Recorded Time or Action Button */}
-                      <div className="mt-4 pt-3 border-t border-[var(--border-color)]">
-                        {ev ? (
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-[9px] text-[var(--text-muted)] uppercase font-bold">Hora Registrada:</p>
-                              <p className="text-base font-black text-emerald-400">
-                                {new Date(ev.event_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => handleAttendance(stepItem.type)}
-                              className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all"
-                              title="Re-marcar o actualizar hora"
-                            >
-                              Actualizar ⚡
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleAttendance(stepItem.type)}
-                            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider transition-all float-btn shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2"
-                          >
-                            <Clock className="w-3.5 h-3.5" />
-                            <span>Marcar Hora Ahora</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-             </div>
-          </div>
-        </div>
-
-        
-              {/* Attendance Summary */}
-              {events.length > 0 && (
-                <div className="mt-6 border-t border-white/5 pt-6">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">{t('day_records')}</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {(['ENTRADA','COMIDA_SALIDA','COMIDA_REGRESO','SALIDA_FINAL'] as const).map((tipo) => {
-                      const ev = events.find((e: any) => {
-                        if (tipo === 'SALIDA_FINAL') return e.event_type === 'SALIDA_FINAL' || e.event_type === 'SALIDA' || e.event_type === 'SALIDA_FINAL_ALT'
-                        if (tipo === 'ENTRADA') return e.event_type === 'ENTRADA' || e.event_type === 'CHECK_IN'
-                        return e.event_type === tipo
-                      })
-                      const meta: Record<string, {label: string, color: string}> = {
-                        'ENTRADA':        { label: t('entrada'),    color: 'indigo' },
-                        'COMIDA_SALIDA':  { label: t('comida_out'), color: 'amber'  },
-                        'COMIDA_REGRESO': { label: t('comida_in'),  color: 'cyan'   },
-                        'SALIDA_FINAL':   { label: t('salida_final'),color: 'rose'   },
-                      }
-                      const m = meta[tipo]
-                      return (
-                        <div key={tipo} className={cn("rounded-2xl p-3 border text-center relative group/box",
-                          ev ? (
-                            m.color === 'indigo' ? "bg-indigo-500/10 border-indigo-500/30" :
-                            m.color === 'amber'  ? "bg-amber-500/10  border-amber-500/30"  :
-                            m.color === 'cyan'   ? "bg-cyan-500/10   border-cyan-500/30"   :
-                                                   "bg-rose-500/10   border-rose-500/30"
-                          ) : "bg-slate-900/30 border-slate-800"
-                        )}>
-                          <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">{m.label}</p>
-                          {ev ? (
-                            <div className="mt-1">
-                              {editingEventId === ev.id ? (
-                                <div className="flex flex-col items-center gap-1">
-                                  <input 
-                                    type="time" 
-                                    value={editTimeValue}
-                                    onChange={(e) => setEditTimeValue(e.target.value)}
-                                    className="bg-slate-900 border border-indigo-500/50 rounded-lg text-xs font-black text-white px-1 py-0.5 outline-none w-full max-w-[80px]"
-                                  />
-                                  <div className="flex items-center gap-2">
-                                    <button onClick={() => handleSaveEdit(ev)} className="p-1 bg-emerald-500/20 text-emerald-400 rounded-md hover:bg-emerald-500/40 transition-colors">
-                                      <Check className="w-3 h-3" />
-                                    </button>
-                                    <button onClick={() => setEditingEventId(null)} className="p-1 bg-slate-800 text-slate-400 rounded-md hover:bg-slate-700 transition-colors">
-                                      <RotateCcw className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <p className={cn("text-sm font-black",
-                                    m.color === 'indigo' ? "text-indigo-300" :
-                                    m.color === 'amber'  ? "text-amber-300"  :
-                                    m.color === 'cyan'   ? "text-cyan-300"   : "text-rose-300"
-                                  )}>
-                                    {new Date(ev.event_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                                  </p>
-                                  
-                                  {/* Actions */}
-                                  <div className="absolute top-1 right-1 flex items-center gap-1 transition-opacity">
-                                    <button 
-                                      onClick={() => {
-                                        setEditingEventId(ev.id)
-                                        setEditTimeValue(new Date(ev.event_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }))
-                                      }}
-                                      className="p-1 px-2 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded-lg transition-all border border-indigo-500/20 shadow-sm"
-                                      title="Editar hora"
-                                    >
-                                      <Edit2 className="w-3 h-3" />
-                                    </button>
-                                    <button 
-                                      onClick={() => handleDeleteEvent(ev.id)}
-                                      className="p-1 px-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-all border border-red-500/20 shadow-sm"
-                                      title="Eliminar este registro"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          ) : (
-                            <p className="text-xs text-slate-700 font-mono mt-1">--:--</p>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                  {(() => {
-                    const entrada = events.find((e: any) => e.event_type === 'ENTRADA')
-                    const salida  = events.find((e: any) => e.event_type === 'SALIDA_FINAL')
-                    if (entrada && salida) {
-                      const diffMs = new Date(salida.event_time).getTime() - new Date(entrada.event_time).getTime()
-                      const totalHrs = (diffMs / 3600000).toFixed(1)
-                      return (
-                        <div className="mt-4 flex items-center justify-end gap-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                          <Clock className="w-4 h-4 text-emerald-400" />
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Horas trabajadas:</span>
-                          <span className="text-sm font-black text-emerald-300">{totalHrs} hrs</span>
-                        </div>
-                      )
-                    }
-                    return null
-                  })()}
-                </div>
+              <p className="text-xs font-black uppercase tracking-wider">Entrada General</p>
+              {entradaEv ? (
+                <p className="text-base font-black mt-1 text-emerald-400">
+                  {format(new Date(entradaEv.event_time), 'hh:mm a')}
+                </p>
+              ) : (
+                <p className="text-[11px] text-[var(--text-muted)] font-semibold mt-1">Inicio de turno</p>
               )}
-        {/* Capture Container */}
-        <div className="glass-dark shadow-2xl rounded-[2rem] p-8 md:p-10 border border-white/5 relative overflow-hidden group">
-            <div className="relative z-10 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 border-b border-white/10 pb-8 mb-8 mt-2">
-               <div>
-                  <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight flex items-center">
-                    <CheckCircle2 className="w-8 h-8 mr-4 text-indigo-400" />
-                    Registro de Actividades
-                  </h3>
-                  <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-2 flex items-center">
-                     <UserIcon className="w-4 h-4 mr-2" />
-                     Trabajador: <span className="text-white ml-2">{employee?.nombre || userName}</span>
-                  </p>
-               </div>
             </div>
+            <button
+              onClick={() => handleClockingEvent('ENTRADA')}
+              disabled={loading || selectedDayStatus === 'Enviado' || selectedDayStatus === 'Autorizado'}
+              className={cn(
+                "w-full py-2 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-md active:scale-95",
+                entradaEv 
+                  ? "bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-white" 
+                  : "bg-indigo-600 hover:bg-indigo-500 text-white"
+              )}
+            >
+              {entradaEv ? 'Actualizar ⚡' : 'Marcar Entrada'}
+            </button>
+          </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 relative z-10">
-              
-              {/* Left Side: Activity */}
-              <div className="space-y-8 flex flex-col h-full">
-                 <div className="flex-1 space-y-8">
-                    <div className="space-y-3">
-                       <label className="text-xs font-black uppercase tracking-widest text-indigo-300 flex items-center">
-                         <FileText className="w-5 h-5 mr-3" />
-                         Descripción del Trabajo
-                       </label>
-                       <textarea 
-                         rows={7}
-                         value={activityDesc}
-                         onChange={(e) => setActivityDesc(e.target.value)}
-                         placeholder="Ej. Colado de losa en área B..."
-                         className="w-full text-base form-pop input-dark rounded-[1.5rem] p-6 font-bold text-white placeholder:text-slate-400 border-white/5 focus:border-indigo-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)] bg-slate-800/80 transition-all outline-none resize-none" 
-                       />
-                    </div>
-                    
-                    <div className="space-y-3">
-                       <label className="text-xs font-black uppercase tracking-widest text-indigo-300 flex items-center">
-                         <Clock className="w-5 h-5 mr-3" />
-                         Total de Horas Dedicadas
-                       </label>
-                       <input 
-                         type="number" 
-                         step="0.5"
-                         value={activityHours}
-                         onChange={(e) => setActivityHours(e.target.value)}
-                         placeholder="8.0"
-                         className="w-full h-20 form-pop input-dark rounded-[1.5rem] px-8 text-3xl font-black text-white placeholder:text-slate-400 border-white/5 focus:border-indigo-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)] bg-slate-800/80 transition-all outline-none" 
-                       />
-                    </div>
-                 </div>
-
-                 <div className="mt-8 pt-6 border-t border-white/5">
-                    <button 
-                      onClick={handleSubmitDescription}
-                      disabled={uploadingActivity}
-                      className="w-full h-16 bg-indigo-600 text-white rounded-[1.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-indigo-600/20 hover:bg-indigo-500 float-btn active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
-                    >
-                      {uploadingActivity ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                      Guardar Actividades
-                    </button>
-                 </div>
-              </div>
-
-              {/* Right Side: Evidence */}
-              <div className="space-y-6 flex flex-col h-full">
-                 <label className="text-xs font-black uppercase tracking-widest text-emerald-400 flex items-center">
-                    <Camera className="w-5 h-5 mr-3" />
-                    Respaldo Visual (Fotografías)
-                 </label>
-                 
-                 <div className="flex-1 min-h-[300px] relative">
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      multiple 
-                      ref={fileInputRef} 
-                      className="hidden" 
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || [])
-                        setActivityFiles(prev => [...prev, ...files])
-                      }} 
-                    />
-                    
-                    {activityFiles.length === 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 h-full">
-                        <button 
-                          onClick={() => setShowCamera(true)}
-                          className="w-full h-full min-h-[160px] flex flex-col items-center justify-center gap-4 rounded-[2rem] border-2 border-dashed border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5 bg-slate-900/30 transition-all group overflow-hidden"
-                        >
-                           <Camera className="w-8 h-8 text-emerald-400 group-hover:scale-110 transition-transform" />
-                           <div className="text-center px-4 relative">
-                             <p className="text-sm font-black text-white uppercase tracking-tight">Tomar Foto</p>
-                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Cámara In-App</p>
-                           </div>
-                        </button>
-                        <button 
-                          onClick={() => fileInputRef.current?.click()}
-                          className="w-full h-full min-h-[160px] flex flex-col items-center justify-center gap-4 rounded-[2rem] border-2 border-dashed border-slate-700 hover:border-indigo-500/50 hover:bg-indigo-500/5 bg-slate-900/30 transition-all group overflow-hidden"
-                        >
-                           <Upload className="w-8 h-8 text-slate-400 group-hover:text-indigo-400 group-hover:scale-110 transition-transform" />
-                           <div className="text-center px-4">
-                             <p className="text-sm font-black text-white uppercase tracking-tight">Galería</p>
-                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Fotos guardadas</p>
-                           </div>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {activityFiles.map((file, idx) => (
-                              <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 group">
-                                 <img 
-                                   src={URL.createObjectURL(file)} 
-                                   alt="Preview" 
-                                   className="w-full h-full object-cover"
-                                 />
-                                 <button 
-                                   onClick={() => setActivityFiles(prev => prev.filter((_, i) => i !== idx))}
-                                   className="absolute top-1 right-1 p-1.5 bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                                 >
-                                   <Trash2 className="w-3 h-3" />
-                                 </button>
-                              </div>
-                            ))}
-                            <button 
-                              onClick={() => setShowCamera(true)}
-                              className="aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 transition-all cursor-pointer"
-                            >
-                               <Plus className="w-6 h-6 text-emerald-400 pointer-events-none" />
-                               <span className="text-[8px] font-black text-white uppercase pointer-events-none">Añadir Foto</span>
-                            </button>
-                         </div>
-                         <div className="flex justify-between items-center bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/20">
-                            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">{activityFiles.length} Fotos Seleccionadas</span>
-                            <button onClick={() => setActivityFiles([])} className="text-[10px] font-bold text-red-400 uppercase tracking-widest hover:text-red-300">Limpiar Todo</button>
-                         </div>
-                      </div>
-                    )}
-                 </div>
-                 
-                 <div className="mt-8 pt-6 border-t border-white/5">
-                   <button 
-                     onClick={handleSubmitEvidence}
-                     disabled={uploadingEvidence}
-                     className="w-full h-16 bg-emerald-600 text-emerald-50 rounded-[1.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-emerald-600/20 hover:bg-emerald-500 float-btn active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
-                   >
-                     {uploadingEvidence ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-                     Guardar Registro Evidencia
-                   </button>
-                 </div>
-              </div>
-
+          {/* Paso 2: Salida a Comer */}
+          <div className={cn(
+            "p-4 rounded-2xl border transition-all duration-300 flex flex-col justify-between space-y-3",
+            salidaComerEv ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : "glass border-[var(--border-color)] text-[var(--text-main)]"
+          )}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Paso 2</span>
+              {salidaComerEv ? <CheckCircle2 className="w-5 h-5 text-amber-400" /> : <Coffee className="w-5 h-5 text-amber-400" />}
             </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider">Salida a Comer</p>
+              {salidaComerEv ? (
+                <p className="text-base font-black mt-1 text-amber-400">
+                  {format(new Date(salidaComerEv.event_time), 'hh:mm a')}
+                </p>
+              ) : (
+                <p className="text-[11px] text-[var(--text-muted)] font-semibold mt-1">Pausa Alimento</p>
+              )}
+            </div>
+            <button
+              onClick={() => handleClockingEvent('SALIDA_COMER')}
+              disabled={loading || selectedDayStatus === 'Enviado' || selectedDayStatus === 'Autorizado'}
+              className={cn(
+                "w-full py-2 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-md active:scale-95",
+                salidaComerEv 
+                  ? "bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-white" 
+                  : "bg-amber-600 hover:bg-amber-500 text-white"
+              )}
+            >
+              {salidaComerEv ? 'Actualizar ⚡' : 'Salida a Comer'}
+            </button>
+          </div>
+
+          {/* Paso 3: Regreso de Comer */}
+          <div className={cn(
+            "p-4 rounded-2xl border transition-all duration-300 flex flex-col justify-between space-y-3",
+            entradaComerEv ? "bg-blue-500/10 border-blue-500/30 text-blue-400" : "glass border-[var(--border-color)] text-[var(--text-main)]"
+          )}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Paso 3</span>
+              {entradaComerEv ? <CheckCircle2 className="w-5 h-5 text-blue-400" /> : <RotateCcw className="w-5 h-5 text-blue-400" />}
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider">Regreso de Comer</p>
+              {entradaComerEv ? (
+                <p className="text-base font-black mt-1 text-blue-400">
+                  {format(new Date(entradaComerEv.event_time), 'hh:mm a')}
+                </p>
+              ) : (
+                <p className="text-[11px] text-[var(--text-muted)] font-semibold mt-1">Retorno a Labores</p>
+              )}
+            </div>
+            <button
+              onClick={() => handleClockingEvent('ENTRADA_COMER')}
+              disabled={loading || selectedDayStatus === 'Enviado' || selectedDayStatus === 'Autorizado'}
+              className={cn(
+                "w-full py-2 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-md active:scale-95",
+                entradaComerEv 
+                  ? "bg-blue-500/20 hover:bg-blue-500 text-blue-300 hover:text-white" 
+                  : "bg-blue-600 hover:bg-blue-500 text-white"
+              )}
+            >
+              {entradaComerEv ? 'Actualizar ⚡' : 'Regreso de Comer'}
+            </button>
+          </div>
+
+          {/* Paso 4: Salida Final */}
+          <div className={cn(
+            "p-4 rounded-2xl border transition-all duration-300 flex flex-col justify-between space-y-3",
+            salidaFinalEv ? "bg-purple-500/10 border-purple-500/30 text-purple-400" : "glass border-[var(--border-color)] text-[var(--text-main)]"
+          )}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Paso 4</span>
+              {salidaFinalEv ? <CheckCircle2 className="w-5 h-5 text-purple-400" /> : <Square className="w-5 h-5 text-purple-400" />}
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider">Salida Final</p>
+              {salidaFinalEv ? (
+                <p className="text-base font-black mt-1 text-purple-400">
+                  {format(new Date(salidaFinalEv.event_time), 'hh:mm a')}
+                </p>
+              ) : (
+                <p className="text-[11px] text-[var(--text-muted)] font-semibold mt-1">Cierre de Jornada</p>
+              )}
+            </div>
+            <button
+              onClick={() => handleClockingEvent('SALIDA_FINAL')}
+              disabled={loading || selectedDayStatus === 'Enviado' || selectedDayStatus === 'Autorizado'}
+              className={cn(
+                "w-full py-2 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-md active:scale-95",
+                salidaFinalEv 
+                  ? "bg-purple-500/20 hover:bg-purple-500 text-purple-300 hover:text-white" 
+                  : "bg-purple-600 hover:bg-purple-500 text-white"
+              )}
+            >
+              {salidaFinalEv ? 'Actualizar ⚡' : 'Salida Final'}
+            </button>
+          </div>
+
         </div>
+
+        {/* Submit Day Button */}
+        {selectedDayStatus !== 'Enviado' && selectedDayStatus !== 'Autorizado' && (
+          <button
+            onClick={() => setShowCloseAuditModal(true)}
+            className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-[0.2em] shadow-xl float-btn transition-all active:scale-95 flex items-center justify-center gap-2"
+          >
+            <CheckCircle2 className="w-5 h-5" />
+            <span>Enviar y Cerrar Día</span>
+          </button>
+        )}
       </div>
 
-      {/* Activities List */}
-      {activities.length > 0 && (
-        <div className="glass-dark shadow-2xl rounded-[2rem] p-8 border border-white/5">
-          <h3 className="text-xs font-black text-white uppercase tracking-[0.4em] mb-6 flex items-center">
-            <FileText className="w-4 h-4 mr-2 text-indigo-400" />
-            Actividades Registradas del Día
-          </h3>
-          <div className="space-y-3">
-            {activities.map((act: any) => (
-              <div key={act.id} className="flex items-start justify-between gap-4 p-4 rounded-2xl bg-slate-900/50 border border-white/5 hover:border-indigo-500/20 transition-all">
-                <div className="flex-1 min-w-0">
-                  {act.storage_url ? (
-                    <div className="flex items-center gap-3">
-                      <img src={act.storage_url} className="w-12 h-12 rounded-xl object-cover border border-white/10" alt="evidencia" />
-                      <div>
-                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Evidencia Fotográfica</p>
-                        <p className="text-[9px] text-slate-500">{new Date(act.created_at || act.date).toLocaleString('es-MX')}</p>
-                      </div>
-                    </div>
-                  ) : editingActivityId === act.id ? (
-                    <div className="flex flex-col gap-2 w-full pr-4">
-                      <textarea 
-                        value={editActivityDesc}
-                        onChange={(e) => setEditActivityDesc(e.target.value)}
-                        className="w-full text-xs bg-slate-800 border border-indigo-500/50 rounded-lg text-white px-2 py-1 outline-none resize-none input-dark"
-                        rows={2}
-                      />
-                      <div className="flex items-center gap-2">
-                        <input 
-                          type="number" 
-                          step="0.5"
-                          value={editActivityHours}
-                          onChange={(e) => setEditActivityHours(e.target.value)}
-                          className="w-20 text-xs bg-slate-800 border border-indigo-500/50 rounded-lg text-white px-2 py-1 outline-none input-dark"
-                        />
-                        <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">hrs</span>
-                        <div className="ml-auto flex items-center gap-2">
-                          <button onClick={() => saveEditedActivity(act.id)} className="p-1 bg-emerald-500/20 text-emerald-400 rounded-md hover:bg-emerald-500/40 transition-colors">
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => setEditingActivityId(null)} className="p-1 bg-slate-800 text-slate-400 rounded-md hover:bg-slate-700 transition-colors">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-sm font-bold text-white whitespace-pre-wrap">{act.activity_description || act.activity_name}</p>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">{act.hours_dedicated || 0} hrs</span>
-                        <span className="text-[9px] text-slate-600">{act.date}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                {!act.storage_url && editingActivityId !== act.id && (
-                  <div className="flex flex-col gap-1 shrink-0">
-                    <button 
-                      onClick={() => {
-                        setEditingActivityId(act.id)
-                        setEditActivityDesc(act.activity_description || act.activity_name || '')
-                        setEditActivityHours(act.hours_dedicated?.toString() || '0')
-                      }}
-                      className="p-2 text-indigo-400 hover:bg-indigo-500/10 rounded-xl border border-transparent hover:border-indigo-500/20 transition-all"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => deleteActivity(act.id)}
-                      className="p-2 text-red-400 hover:bg-red-500/10 rounded-xl border border-transparent hover:border-red-500/20 transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-                {act.storage_url && (
-                  <button 
-                    onClick={() => deleteActivity(act.id)}
-                    className="p-2 text-red-400 hover:bg-red-500/10 rounded-xl border border-transparent hover:border-red-500/20 transition-all shrink-0"
+      {/* Evidencias & Actividades Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        {/* Camara / Evidencias Fotográficas */}
+        <div className="glass-card rounded-3xl p-6 border border-[var(--border-color)] shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+            <h4 className="text-sm font-black text-[var(--text-main)] uppercase tracking-wider flex items-center gap-2">
+              <Camera className="w-4 h-4 text-indigo-400" />
+              <span>Evidencias Fotográficas ({photosList.length})</span>
+            </h4>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowCamera(true)}
+              className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"
+            >
+              <Camera className="w-4 h-4" />
+              <span>Tomar Foto Web</span>
+            </button>
+
+            <label className="flex-1 py-3 px-4 rounded-xl glass hover:border-indigo-500/40 text-[var(--text-main)] text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95 border border-[var(--border-color)]">
+              <Upload className="w-4 h-4 text-indigo-400" />
+              <span>Subir Archivo</span>
+              <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+            </label>
+          </div>
+
+          {photosList.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              {photosList.map((photo) => (
+                <div key={photo.id} className="relative group rounded-2xl overflow-hidden border border-[var(--border-color)] aspect-video bg-slate-950">
+                  <img src={photo.storage_url} alt="Evidencia" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  <button
+                    onClick={() => deleteActivity(photo.id)}
+                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-red-600 text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Registro de Actividades Manuales */}
+        <div className="glass-card rounded-3xl p-6 border border-[var(--border-color)] shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+            <h4 className="text-sm font-black text-[var(--text-main)] uppercase tracking-wider flex items-center gap-2">
+              <FileText className="w-4 h-4 text-indigo-400" />
+              <span>Actividades Realizadas</span>
+            </h4>
+          </div>
+
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={newDesc}
+              onChange={(e) => setNewDesc(e.target.value)}
+              placeholder="Descripción del trabajo realizado..."
+              className="w-full h-10 px-3 text-xs font-semibold rounded-xl input-executive"
+            />
+
+            <div className="flex gap-2">
+              <input
+                type="number"
+                value={newHours}
+                onChange={(e) => setNewHours(e.target.value)}
+                placeholder="Horas"
+                className="w-24 h-10 px-3 text-xs font-semibold rounded-xl input-executive"
+              />
+              <button
+                onClick={addActivity}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95"
+              >
+                Agregar Actividad
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {activities.filter(a => !a.storage_url).map((act) => (
+              <div key={act.id} className="p-3 rounded-xl glass border border-[var(--border-color)] flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-[var(--text-main)]">{act.activity_description || act.activity_name}</p>
+                  <p className="text-[10px] text-indigo-400 font-bold">{act.hours_dedicated} horas</p>
+                </div>
+                <button onClick={() => deleteActivity(act.id)} className="text-red-400 hover:text-red-300 p-1">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
           </div>
         </div>
+
+      </div>
+
+      {/* 🤖 AUDITORÍA INTELIGENTE PRE-CIERRE DE DÍA CON IA (MODAL CYBER) */}
+      {showCloseAuditModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-3xl glass-card p-6 border border-indigo-500/40 shadow-2xl space-y-6 relative overflow-hidden">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg">
+                  <Bot className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-[var(--text-main)] uppercase tracking-wider">
+                    Auditoría Inteligente de Cierre
+                  </h3>
+                  <p className="text-[10px] text-indigo-400 font-bold">Verificación Co-pilot antes de enviar</p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setShowCloseAuditModal(false)}
+                className="p-1.5 rounded-xl glass text-[var(--text-muted)] hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Audit Summary Grid */}
+            <div className="space-y-3">
+              
+              {/* ⏱️ Horas Totales */}
+              <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-indigo-400" />
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-[var(--text-muted)]">Horas Totales Trabajadas</p>
+                    <p className="text-base font-black text-indigo-400">{calculatedHours} Horas Acumuladas</p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 font-bold text-xs">
+                  {calculatedHours >= 4 ? 'Jornada Completa' : 'Jornada Parcial'}
+                </span>
+              </div>
+
+              {/* 🥪 Pausa de Comida */}
+              <div className={cn(
+                "p-4 rounded-2xl border flex items-center justify-between",
+                salidaComerEv && entradaComerEv 
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" 
+                  : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+              )}>
+                <div className="flex items-center gap-3">
+                  <Coffee className="w-5 h-5" />
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider opacity-80">Pausa de Alimento</p>
+                    <p className="text-xs font-bold">
+                      {salidaComerEv && entradaComerEv 
+                        ? '✅ Registraste tu descanso de comida correctamente' 
+                        : '⚠️ No registraste tu pausa de comida (Salida/Regreso a Comer)'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 📸 Fotos de Evidencia */}
+              <div className={cn(
+                "p-4 rounded-2xl border flex items-center justify-between",
+                photosList.length > 0 
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" 
+                  : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+              )}>
+                <div className="flex items-center gap-3">
+                  <Camera className="w-5 h-5" />
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider opacity-80">Fotografías de Trabajo</p>
+                    <p className="text-xs font-bold">
+                      {photosList.length > 0 
+                        ? `📷 ${photosList.length} Foto(s) de evidencia adjunta(s)` 
+                        : '⚠️ No has adjuntado fotos de evidencia de tu trabajo'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Interrogation Question */}
+            <div className="p-4 rounded-2xl glass border border-[var(--border-color)] text-center space-y-1">
+              <p className="text-xs font-black text-[var(--text-main)] uppercase tracking-wider">
+                ¿Confirmas finalizar tu jornada con <span className="text-indigo-400 font-black">{calculatedHours} Horas</span>?
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)] font-semibold">
+                Una vez enviado, tu supervisor recibirá la notificación para su revisión ejecutiva.
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-[var(--border-color)]">
+              <button
+                onClick={() => setShowCloseAuditModal(false)}
+                className="flex-1 py-3 rounded-xl glass hover:border-indigo-500/40 text-[var(--text-main)] font-bold text-xs uppercase tracking-wider transition-all border border-[var(--border-color)]"
+              >
+                📷 Agregar Fotos / Ajustar
+              </button>
+              <button
+                onClick={executeCerrarDia}
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Confirmar y Enviar Día</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
       )}
 
+      {/* Web Camera Modal */}
       {showCamera && (
         <WebCamera 
-          onCapture={(file) => {
-            setActivityFiles(prev => [...prev, file])
+          onCapture={(file: File) => {
+            uploadPhotoFile(file)
             setShowCamera(false)
           }}
           onClose={() => setShowCamera(false)}
         />
       )}
+
     </div>
   )
 }

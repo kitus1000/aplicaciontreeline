@@ -24,7 +24,12 @@ export async function POST(request: Request) {
             return NextResponse.json({ ok: false, error_code: 'BAD_REQUEST', mensaje: 'Cuerpo de la petición inválido.' }, { status: 400, headers: corsHeaders })
         }
 
-        const { id_empleado_token, tipo_checada, codigo_autorizacion, metodo, timestamp_local, timestamp_manual, origen: origenInput, es_manual } = body
+        let { id_empleado_token, tipo_checada, codigo_autorizacion, metodo, timestamp_local, timestamp_manual, origen: origenInput, es_manual } = body
+
+        // Normalizar tipos de checada de comida a nombres canónicos
+        if (tipo_checada === 'COMIDA_SALIDA') tipo_checada = 'SALIDA_COMER'
+        if (tipo_checada === 'COMIDA_REGRESO') tipo_checada = 'ENTRADA_COMER'
+        if (tipo_checada === 'SALIDA') tipo_checada = 'SALIDA_FINAL'
 
         if (!id_empleado_token) {
             return NextResponse.json({ ok: false, error_code: 'MISSING_DATA', mensaje: 'Falta el id del empleado.' }, { status: 400, headers: corsHeaders })

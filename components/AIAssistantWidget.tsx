@@ -87,29 +87,38 @@ export function AIAssistantWidget() {
     loadWorkerContext()
   }, [pathname, impersonatedEmployee])
 
-  // Determine current workday step
-  const hasEntrada = employeeEvents.some(e => e.event_type === 'ENTRADA' || e.event_type === 'CHECK_IN')
+  // Determine current workday step & elapsed hours
+  const entradaEv = employeeEvents.find(e => e.event_type === 'ENTRADA' || e.event_type === 'CHECK_IN')
+  const hasEntrada = Boolean(entradaEv)
   const hasSalidaComida = employeeEvents.some(e => e.event_type === 'SALIDA_COMER' || e.event_type === 'COMIDA_SALIDA')
   const hasEntradaComida = employeeEvents.some(e => e.event_type === 'ENTRADA_COMER' || e.event_type === 'COMIDA_REGRESO')
   const hasSalidaFinal = employeeEvents.some(e => e.event_type === 'SALIDA_FINAL' || e.event_type === 'SALIDA')
   const hasPhotos = employeeActivities.some(a => Boolean(a.storage_url))
 
+  let elapsedHours = 0
+  if (entradaEv) {
+    const diff = Date.now() - new Date(entradaEv.event_time).getTime()
+    elapsedHours = Math.max(0, Math.round((diff / (1000 * 60 * 60)) * 10) / 10)
+  }
+
   // Smart Step Context Generator
   const getSmartStepText = () => {
     if (language === 'en') {
-      if (!hasEntrada) return 'Step 1 Pending: Remember to record your Entrance (Check-in) when starting your shift.'
-      if (!hasSalidaComida) return 'Step 2 Pending: Heading to lunch? Press "Salida a Comer" to pause.'
-      if (!hasEntradaComida) return 'Step 3 Pending: Returned from lunch? Press "Regreso de Comer".'
-      if (!hasSalidaFinal) return 'Step 4 Pending: Shift almost over? Record "Salida Final" before closing the day.'
-      if (!hasPhotos) return '📸 Don\'t forget to upload a work photo before clicking "Send & Close Day"!'
-      return '🎉 Great job! All 4 steps and photo evidence are complete. You can now close your day!'
+      if (!hasEntrada) return '📍 Step 1 Pending: Remember to record your Entrance (Check-in) when starting your shift.'
+      if (!hasSalidaComida && elapsedHours >= 4) return `⚠️ You have worked ${elapsedHours} hours and haven't logged lunch yet. Remember to press "Salida a Comer".`
+      if (!hasSalidaComida) return '🥪 Step 2 Pending: Heading to lunch? Press "Salida a Comer" to pause.'
+      if (!hasEntradaComida) return '⚡ Step 3 Pending: Returned from lunch? Press "Regreso de Comer".'
+      if (!hasSalidaFinal) return `🔴 Step 4 Pending: You have accumulated ${elapsedHours} hours today. Record "Salida Final" before closing.`
+      if (!hasPhotos) return `📸 You have ${elapsedHours} hours today. Don't forget to upload a work photo before clicking "Send & Close Day"!`
+      return `🎉 Great job! You completed ${elapsedHours} hours today with photo evidence. You can now close your day!`
     } else {
       if (!hasEntrada) return '📍 Paso 1 Pendiente: Recuerda marcar tu Entrada General al llegar a la obra.'
+      if (!hasSalidaComida && elapsedHours >= 4) return `⚠️ Llevas ${elapsedHours} horas trabajando y no has registrado tu pausa de comida. Recuerda presionar "Salida a Comer".`
       if (!hasSalidaComida) return '🥪 Paso 2 Pendiente: ¿Vas a comer? Presiona "Salida a Comer" en el proceso guiado.'
-      if (!hasEntradaComida) return '⚡ Paso 3 Pendiente: ¿Volviste de comer? Presiona "Regreso de Comer" para reiniciar labors.'
-      if (!hasSalidaFinal) return '🔴 Paso 4 Pendiente: ¿Terminó tu jornada? Registra tu "Salida Final" antes de cerrar.'
-      if (!hasPhotos) return '📸 ¡Atención! Recuerda tomar o adjuntar una foto de tu trabajo antes de presionar "Enviar y Cerrar Día".'
-      return '🎉 ¡Excelente trabajo! Tienes tus 4 pasos y evidencias listas. Ya puedes Enviar y Cerrar tu Día.'
+      if (!hasEntradaComida) return '⚡ Paso 3 Pendiente: ¿Volviste de comer? Presiona "Regreso de Comer" para reiniciar labores.'
+      if (!hasSalidaFinal) return `🔴 Paso 4 Pendiente: Llevas ${elapsedHours} horas acumuladas hoy. Registra tu "Salida Final" antes de cerrar.`
+      if (!hasPhotos) return `📸 Llevas ${elapsedHours} horas hoy. ¡Recuerda adjuntar una foto de tu trabajo antes de presionar "Enviar y Cerrar Día"!`
+      return `🎉 ¡Excelente trabajo! Completaste ${elapsedHours} horas hoy con tus evidencias fotográficas listas.`
     }
   }
 
