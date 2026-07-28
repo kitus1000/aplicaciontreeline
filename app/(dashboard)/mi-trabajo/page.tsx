@@ -533,17 +533,58 @@ export default function MiTrabajoProPage() {
         </div>
       </div>
 
-      {/* ⚡ STEPPER GUIADO PASO A PASO EN 4 FASES DE LA JORNADA */}
-      <div className="cyber-card rounded-3xl p-6 border border-[var(--border-color)] shadow-2xl space-y-6">
-        
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border-color)] pb-4">
-          <div>
-            <h3 className="text-lg font-black text-[var(--text-main)] uppercase tracking-wide flex items-center gap-2">
-              <span>Proceso Guiado de Jornada</span>
-              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-bold text-[10px] border border-indigo-500/20">
-                Paso a Paso
+      {/* Active Authorized Leave Card (Full-width blocking) */}
+      {activePermission ? (
+        <div className="glass-card rounded-3xl p-8 sm:p-12 border-2 border-indigo-500/50 shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-300 relative overflow-hidden my-6">
+          <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/10 via-purple-500/5 to-transparent pointer-events-none" />
+          
+          <div className="relative z-10 space-y-5 max-w-lg mx-auto">
+            <div className="w-24 h-24 rounded-3xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 flex items-center justify-center mx-auto shadow-2xl animate-bounce">
+              <CalendarIcon className="w-12 h-12" />
+            </div>
+
+            <div>
+              <span className={cn(
+                "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border inline-block mb-3 shadow-md",
+                activePermission.tipo_permiso === 'PERMISO_CON_SUELDO' || activePermission.tipo_permiso?.includes('CON_SUELDO')
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" 
+                  : "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+              )}>
+                {activePermission.tipo_permiso === 'PERMISO_CON_SUELDO' || activePermission.tipo_permiso?.includes('CON_SUELDO') 
+                  ? '🟢 PERMISO AUTORIZADO CON GOCE DE SUELDO' 
+                  : '🔵 PERMISO AUTORIZADO SIN GOCE DE SUELDO'}
               </span>
-            </h3>
+              
+              <h2 className="text-3xl sm:text-4xl font-black text-[var(--text-main)] tracking-tight leading-tight">
+                ¡Hoy Estás de Permiso Autorizado! 🏖️
+              </h2>
+            </div>
+
+            <p className="text-sm font-semibold text-[var(--text-muted)] leading-relaxed">
+              La administración ha registrado un permiso oficial para tu jornada de hoy. 
+              <strong className="text-[var(--text-main)] block mt-2 p-3.5 rounded-2xl glass border border-[var(--border-color)] text-xs">
+                "{activePermission.motivo || 'Permiso Autorizado por Administración'}"
+              </strong>
+            </p>
+
+            <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-xs font-bold text-indigo-300 flex items-center justify-center gap-2">
+              <span>🔒 La aplicación está en pausa. No requieres realizar marcaje de entrada, salida ni enviar evidencias fotográficas hoy.</span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {/* ⚡ STEPPER GUIADO PASO A PASO EN 4 FASES DE LA JORNADA */}
+          <div className="cyber-card rounded-3xl p-6 border border-[var(--border-color)] shadow-2xl space-y-6">
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border-color)] pb-4">
+              <div>
+                <h3 className="text-lg font-black text-[var(--text-main)] uppercase tracking-wide flex items-center gap-2">
+                  <span>Proceso Guiado de Jornada</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-bold text-[10px] border border-indigo-500/20">
+                    Paso a Paso
+                  </span>
+                </h3>
             <p className="text-xs font-semibold text-[var(--text-muted)] mt-0.5">
               Registra cada etapa cronológica de tu turno de hoy
             </p>
@@ -804,10 +845,8 @@ export default function MiTrabajoProPage() {
                 </button>
               </div>
             ))}
-          </div>
         </div>
-
-      </div>
+      )}
 
       {/* 🤖 AUDITORÍA INTELIGENTE PRE-CIERRE DE DÍA CON IA (MODAL CYBER) */}
       {showCloseAuditModal && (

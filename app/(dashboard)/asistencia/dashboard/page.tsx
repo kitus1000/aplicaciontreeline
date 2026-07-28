@@ -87,7 +87,17 @@ export default function AsistenciaDashboard() {
                 .eq('fecha_local', selectedDate)
                 .order('timestamp_checada', { ascending: false })
 
-            // 3. Safe Fetch permisos_autorizados (if exists)
+            // 3. Fetch workday_approval_status for permissions
+            const { data: statusPermisos } = await supabase
+                .from('workday_approval_status')
+                .select(`
+                    *,
+                    empleados (id_empleado, nombre, apellido_paterno, apellido_materno, numero_empleado)
+                `)
+                .eq('date', selectedDate)
+                .ilike('comments', '%PERMISO%')
+
+            // 4. Safe Fetch permisos_autorizados (if exists)
             let permisosData: any[] = []
             try {
                 const { data: pData } = await supabase
@@ -122,6 +132,25 @@ export default function AsistenciaDashboard() {
                     motivo: p.motivo,
                     empleados: p.empleados
                 })
+            })
+
+            statusPermisos?.forEach(sp => {
+                const uniqueKey = `${sp.employee_id}_permiso_status_${selectedDate}`
+                if (!seenKeys.has(uniqueKey)) {
+                    seenKeys.add(uniqueKey)
+                    const isConSueldo = sp.comments?.includes('Con Sueldo')
+                    combinedRecords.push({
+                        id: sp.id,
+                        dbTable: 'workday_approval_status',
+                        fecha_local: selectedDate,
+                        timestamp_checada: sp.reviewed_at || selectedDate,
+                        tipo_checada: isConSueldo ? 'PERMISO CON SUELDO' : 'PERMISO SIN SUELDO',
+                        estatus_puntualidad: isConSueldo ? 'CON_SUELDO' : 'SIN_SUELDO',
+                        source: 'ADMINISTRADOR',
+                        motivo: sp.comments,
+                        empleados: sp.empleados
+                    })
+                }
             })
 
             eventsData?.forEach(e => {
