@@ -264,10 +264,10 @@ export default function AsistenciaDashboard() {
                     
                     <button
                         onClick={() => setShowPermisoModal(true)}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-indigo-600/30 flex items-center gap-2 float-btn"
+                        className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-xl shadow-indigo-600/40 flex items-center gap-2 float-btn border border-indigo-400/40"
                     >
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>🏖️ Registrar Permiso</span>
+                        <ShieldCheck className="w-4.5 h-4.5 text-amber-300" />
+                        <span>🏖️ + Registrar Permiso Autorizado</span>
                     </button>
 
                     <button
@@ -311,9 +311,18 @@ export default function AsistenciaDashboard() {
                         <Activity className="w-4 h-4 text-indigo-400" />
                         <span>Monitoreo de Asistencia y Permisos en Tiempo Real</span>
                     </h3>
-                    <span className="text-[10px] font-bold text-[var(--text-muted)]">
-                        {checadas.length} Registros en {selectedDate}
-                    </span>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setShowPermisoModal(true)}
+                            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 border border-indigo-400/30 shadow-md"
+                        >
+                            <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+                            <span>🏖️ + Registrar Permiso</span>
+                        </button>
+                        <span className="text-[10px] font-bold text-[var(--text-muted)]">
+                            {checadas.length} Registros en {selectedDate}
+                        </span>
+                    </div>
                 </div>
 
                 <div className="overflow-x-auto">
