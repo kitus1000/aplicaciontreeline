@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Clock, Plus, Trash2, Edit, X, Check, CalendarDays, ShieldAlert, ArrowLeft } from 'lucide-react'
+import { Clock, Plus, Trash2, Edit, X, Check, CalendarDays, ShieldAlert, ArrowLeft, Coffee } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/utils/supabase/client'
 import { useI18n } from '@/lib/i18n'
@@ -15,6 +15,8 @@ export default function FastHorariosPage() {
     const [editId, setEditId] = useState<string | null>(null)
     const [showModal, setShowModal] = useState(false)
 
+    const allDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
     // Formulario de Horario Rápido
     const [form, setForm] = useState({
         nombre: '',
@@ -23,7 +25,8 @@ export default function FastHorariosPage() {
         tolerancia_min: 15,
         limite_falta_min: 60,
         ventana_desde: '04:00',
-        ventana_hasta: '12:00'
+        ventana_hasta: '12:00',
+        dias_descanso: ['Domingo'] as string[]
     })
 
     useEffect(() => {
@@ -54,13 +57,22 @@ export default function FastHorariosPage() {
             tolerancia_min: 15,
             limite_falta_min: 60,
             ventana_desde: '04:00',
-            ventana_hasta: '12:00'
+            ventana_hasta: '12:00',
+            dias_descanso: ['Domingo']
         })
         setShowModal(true)
     }
 
     function loadToEdit(t: any) {
         setEditId(t.id)
+        
+        let descansoList: string[] = ['Domingo']
+        if (Array.isArray(t.dias_descanso)) {
+            descansoList = t.dias_descanso
+        } else if (typeof t.dias_descanso === 'string' && t.dias_descanso) {
+            descansoList = t.dias_descanso.split(',').map((s: string) => s.trim())
+        }
+
         setForm({
             nombre: t.nombre,
             hora_inicio: t.hora_inicio ? t.hora_inicio.slice(0, 5) : '08:00',
@@ -68,21 +80,37 @@ export default function FastHorariosPage() {
             tolerancia_min: t.tolerancia_min || 15,
             limite_falta_min: t.limite_falta_min || 60,
             ventana_desde: t.ventana_desde ? t.ventana_desde.slice(0, 5) : '04:00',
-            ventana_hasta: t.ventana_hasta ? t.ventana_hasta.slice(0, 5) : '12:00'
+            ventana_hasta: t.ventana_hasta ? t.ventana_hasta.slice(0, 5) : '12:00',
+            dias_descanso: descansoList
         })
         setShowModal(true)
+    }
+
+    const toggleRestDay = (day: string) => {
+        setForm(prev => {
+            const exists = prev.dias_descanso.includes(day)
+            const updated = exists 
+                ? prev.dias_descanso.filter(d => d !== day)
+                : [...prev.dias_descanso, day]
+            return { ...prev, dias_descanso: updated }
+        })
     }
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         setIsSubmitting(true)
 
+        const payload = {
+            ...form,
+            dias_descanso: form.dias_descanso // Store array or string
+        }
+
         try {
             if (editId) {
-                const { error } = await supabase.from('turnos').update(form).eq('id', editId)
+                const { error } = await supabase.from('turnos').update(payload).eq('id', editId)
                 if (error) throw error
             } else {
-                const { error } = await supabase.from('turnos').insert(form)
+                const { error } = await supabase.from('turnos').insert(payload)
                 if (error) throw error
             }
 
@@ -115,10 +143,10 @@ export default function FastHorariosPage() {
                 <div>
                     <h1 className="text-3xl font-black text-[var(--text-main)] tracking-tight flex items-center gap-3">
                         <Clock className="w-8 h-8 text-amber-400" />
-                        <span>Horarios de Trabajo de Empleados</span>
+                        <span>Horarios de Trabajo y Días de Descanso</span>
                     </h1>
                     <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mt-1">
-                      Crea y administra rápidamente los turnos de entrada, salida y tolerancias de retardo
+                      Configura turnos de entrada, salida y días de descanso oficiales para evitar faltas injustificadas
                     </p>
                 </div>
 
@@ -152,47 +180,70 @@ export default function FastHorariosPage() {
                     <div className="col-span-full py-16 glass-card rounded-3xl border border-[var(--border-color)] text-center space-y-3">
                         <Clock className="w-12 h-12 text-amber-400 mx-auto opacity-40" />
                         <h3 className="text-base font-black text-[var(--text-main)]">No hay horarios registrados</h3>
-                        <p className="text-xs text-[var(--text-muted)] font-semibold">Haz clic en "+ Crear Nuevo Horario" para configurar turnos de entrada y salida.</p>
+                        <p className="text-xs text-[var(--text-muted)] font-semibold">Haz clic en "+ Crear Nuevo Horario" para configurar turnos de entrada, salida y descansos.</p>
                     </div>
                 ) : (
-                    turnos.map((t) => (
-                        <div key={t.id} className="cyber-card rounded-3xl p-6 border border-[var(--border-color)] shadow-xl flex flex-col justify-between space-y-4 float-btn">
-                            
-                            <div className="flex items-start justify-between border-b border-[var(--border-color)] pb-3">
-                                <div>
-                                    <h3 className="text-base font-black text-[var(--text-main)] tracking-tight">{t.nombre}</h3>
-                                    <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 mt-1 inline-block">
-                                        Tolerancia: {t.tolerancia_min} mins
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <button onClick={() => loadToEdit(t)} className="p-1.5 text-[var(--text-muted)] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors">
-                                        <Edit className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={() => handleDelete(t.id)} className="p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
+                    turnos.map((t) => {
+                        let restList: string[] = []
+                        if (Array.isArray(t.dias_descanso)) restList = t.dias_descanso
+                        else if (typeof t.dias_descanso === 'string' && t.dias_descanso) restList = t.dias_descanso.split(',')
+                        else restList = ['Domingo']
 
-                            <div className="grid grid-cols-2 gap-3 text-xs">
-                                <div className="p-3 rounded-2xl glass border border-[var(--border-color)]">
-                                    <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Entrada Oficial</p>
-                                    <p className="text-sm font-black text-emerald-400 mt-0.5">{t.hora_inicio?.slice(0, 5)} hrs</p>
+                        return (
+                            <div key={t.id} className="cyber-card rounded-3xl p-6 border border-[var(--border-color)] shadow-xl flex flex-col justify-between space-y-4 float-btn">
+                                
+                                <div className="flex items-start justify-between border-b border-[var(--border-color)] pb-3">
+                                    <div>
+                                        <h3 className="text-base font-black text-[var(--text-main)] tracking-tight">{t.nombre}</h3>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                                                Tol: {t.tolerancia_min} mins
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <button onClick={() => loadToEdit(t)} className="p-1.5 text-[var(--text-muted)] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors">
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+                                        <button onClick={() => handleDelete(t.id)} className="p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="p-3 rounded-2xl glass border border-[var(--border-color)]">
-                                    <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Salida Oficial</p>
-                                    <p className="text-sm font-black text-indigo-400 mt-0.5">{t.hora_fin?.slice(0, 5)} hrs</p>
+
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <div className="p-3 rounded-2xl glass border border-[var(--border-color)]">
+                                        <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Entrada Oficial</p>
+                                        <p className="text-sm font-black text-emerald-400 mt-0.5">{t.hora_inicio?.slice(0, 5)} hrs</p>
+                                    </div>
+                                    <div className="p-3 rounded-2xl glass border border-[var(--border-color)]">
+                                        <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Salida Oficial</p>
+                                        <p className="text-sm font-black text-indigo-400 mt-0.5">{t.hora_fin?.slice(0, 5)} hrs</p>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div className="text-[10px] font-semibold text-[var(--text-muted)] pt-2 border-t border-[var(--border-color)] flex items-center justify-between">
-                                <span>Límite Retardo / Falta: {t.limite_falta_min || 60} mins</span>
-                                <span className="text-emerald-400 font-bold">Activo</span>
-                            </div>
+                                {/* Rest Days Badges */}
+                                <div className="p-3 rounded-2xl glass border border-[var(--border-color)] space-y-1.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">
+                                        <Coffee className="w-3 h-3 text-purple-400" /> Días de Descanso Oficiales
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                        {restList.map((day, idx) => (
+                                            <span key={idx} className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                                                🏖️ {day.trim()}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
 
-                        </div>
-                    ))
+                                <div className="text-[10px] font-semibold text-[var(--text-muted)] pt-2 border-t border-[var(--border-color)] flex items-center justify-between">
+                                    <span>Límite Retardo: {t.limite_falta_min || 60} mins</span>
+                                    <span className="text-emerald-400 font-bold">Activo</span>
+                                </div>
+
+                            </div>
+                        )
+                    })
                 )}
             </div>
 
@@ -205,7 +256,7 @@ export default function FastHorariosPage() {
                         <div className="flex justify-between items-center p-5 border-b border-[var(--border-color)] bg-white/2">
                             <h3 className="text-base font-black text-[var(--text-main)] uppercase tracking-wider flex items-center gap-2">
                                 <Clock className="w-5 h-5 text-amber-400" />
-                                <span>{editId ? 'Editar Horario de Trabajo' : 'Nuevo Horarios de Trabajo'}</span>
+                                <span>{editId ? 'Editar Horario de Trabajo' : 'Nuevo Horario de Trabajo'}</span>
                             </h3>
                             <button onClick={() => setShowModal(false)} className="text-[var(--text-muted)] hover:text-white"><X className="w-5 h-5"/></button>
                         </div>
@@ -267,6 +318,36 @@ export default function FastHorariosPage() {
                                       className="w-full h-11 px-4 text-xs font-semibold rounded-xl input-executive" 
                                     />
                                 </div>
+                            </div>
+
+                            {/* Selector de Días de Descanso */}
+                            <div className="space-y-2 pt-1">
+                                <label className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest flex items-center gap-1">
+                                    <Coffee className="w-3.5 h-3.5 text-purple-400" /> Selecciona los Días de Descanso Oficiales
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {allDays.map(day => {
+                                        const isSelected = form.dias_descanso.includes(day)
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={day}
+                                                onClick={() => toggleRestDay(day)}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all border",
+                                                    isSelected 
+                                                        ? "bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-600/30 scale-105" 
+                                                        : "glass text-[var(--text-muted)] hover:text-white border-[var(--border-color)]"
+                                                )}
+                                            >
+                                                {isSelected ? `✓ ${day}` : day}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                                <p className="text-[10px] text-[var(--text-muted)] italic">
+                                    * En los días seleccionados, si el trabajador no checa, el sistema marcará "DESCANSO" en lugar de Falta.
+                                </p>
                             </div>
 
                             <div className="pt-3 flex gap-3">

@@ -58,6 +58,7 @@ export default function MiTrabajoProPage() {
   const [showCloseAuditModal, setShowCloseAuditModal] = useState(false)
   const [projectsList, setProjectsList] = useState<any[]>([])
   const [selectedProject, setSelectedProject] = useState<string>('')
+  const [activePermission, setActivePermission] = useState<any>(null)
   
   // New Activity Form
   const [newDesc, setNewDesc] = useState('')
@@ -125,6 +126,17 @@ export default function MiTrabajoProPage() {
         statusMap[s.date] = s.status
       })
       setWeeklyStatus(statusMap)
+
+      // Fetch active permission for selected date
+      const { data: permData } = await supabase
+        .from('permisos_autorizados')
+        .select('*')
+        .eq('id_empleado', empData.id_empleado)
+        .lte('fecha_inicio', dateStr)
+        .gte('fecha_fin', dateStr)
+        .maybeSingle()
+
+      setActivePermission(permData || null)
 
       // 2. Fetch events for selected day
       const { data: evsData } = await supabase
@@ -418,6 +430,31 @@ export default function MiTrabajoProPage() {
             <span>{message.text}</span>
           </div>
           <button onClick={() => setMessage(null)} className="hover:opacity-75">✖</button>
+        </div>
+      )}
+
+      {/* Active Authorized Leave Alert */}
+      {activePermission && (
+        <div className="p-5 rounded-3xl bg-indigo-500/10 border border-indigo-500/30 flex items-center gap-4 shadow-xl animate-in fade-in">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+            <CalendarIcon className="w-6 h-6 animate-pulse text-indigo-400" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-black text-indigo-400 uppercase tracking-wider flex items-center gap-2">
+              <span>🏖️ Permiso Autorizado por Administración</span>
+              <span className={cn(
+                "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border",
+                activePermission.tipo_permiso === 'PERMISO_CON_SUELDO' 
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" 
+                  : "bg-indigo-500/10 text-indigo-400 border-indigo-500/30"
+              )}>
+                {activePermission.tipo_permiso === 'PERMISO_CON_SUELDO' ? '🟢 Con Goce de Sueldo' : '🔵 Sin Goce de Sueldo'}
+              </span>
+            </h3>
+            <p className="text-xs text-[var(--text-main)] font-semibold mt-1">
+              Tienes un permiso registrado para la jornada de hoy ({activePermission.motivo || 'Permiso aprobado'}). No es necesario realizar marcaje de entrada ni salida.
+            </p>
+          </div>
         </div>
       )}
 
