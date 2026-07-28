@@ -9,6 +9,7 @@ import { ImpersonationProvider } from '@/context/ImpersonationContext'
 import { ExecutiveHeader } from '@/components/ExecutiveHeader'
 import { ExecutivePreviewBanner } from '@/components/ExecutivePreviewBanner'
 import { MobileNavigation } from '@/components/MobileNavigation'
+import { AIAssistantWidget } from '@/components/AIAssistantWidget'
 
 export default function DashboardLayout({
     children,
@@ -42,6 +43,9 @@ export default function DashboardLayout({
                             </RoleGuard>
                         </main>
                         
+                        {/* Floating AI Guidance Co-pilot */}
+                        <AIAssistantWidget />
+
                         {/* Mobile Navigation */}
                         <MobileNavigation />
                     </div>
