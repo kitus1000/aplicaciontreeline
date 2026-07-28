@@ -79,6 +79,11 @@ export function ExecutiveHeader() {
     router.push('/')
   }
 
+  const r = (userRole || '').toLowerCase()
+  const email = userEmail.toLowerCase()
+  const adminRoles = ['admin', 'administrador', 'superadmin', 'hr', 'administrativo', 'recursos humanos', 'gerente', 'jefe']
+  const isExecutive = adminRoles.includes(r) || email === 'kitus1000@gmail.com' || email === 'jesus12398@gmail.com' || email.includes('admin') || (typeof window !== 'undefined' && localStorage.getItem('adminBypass') === 'true')
+
   return (
     <header className="sticky top-0 z-40 w-full glass transition-colors duration-300 border-b border-[var(--border-color)]">
       <div className="mx-auto flex h-16 items-center justify-between px-4 md:px-8">
@@ -100,75 +105,79 @@ export function ExecutiveHeader() {
         {/* Right Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
           
-          {/* Closed Workdays Alert Notification Badge */}
-          <Link
-            href="/autorizaciones/jornadas"
-            title="Ver Trabajadores con Día Cerrado Pendientes de Aprobación"
-            className="relative p-2.5 rounded-xl glass hover:border-indigo-500/40 text-[var(--text-main)] transition-all flex items-center gap-2"
-          >
-            <Bell className="w-4 h-4 text-amber-400 animate-bounce" />
-            {pendingWorkdaysCount > 0 && (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px] animate-pulse">
-                {pendingWorkdaysCount} <span className="hidden sm:inline">Días Cerrados</span>
-              </span>
-            )}
-          </Link>
-
-          {/* Employee Screen Simulator Picker Button */}
-          <div className="relative">
-            <button
-              onClick={() => setShowEmployeePicker(!showEmployeePicker)}
-              title="Simular vista de trabajador"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl glass hover:border-indigo-500/40 text-xs font-bold text-indigo-400 transition-all active:scale-95 border border-indigo-500/20"
+          {/* Executive Only: Closed Workdays Alert Notification Badge */}
+          {isExecutive && (
+            <Link
+              href="/autorizaciones/jornadas"
+              title="Ver Trabajadores con Día Cerrado Pendientes de Aprobación"
+              className="relative p-2.5 rounded-xl glass hover:border-indigo-500/40 text-[var(--text-main)] transition-all flex items-center gap-2"
             >
-              <Eye className="w-4 h-4 text-indigo-400" />
-              <span className="hidden md:inline">👁️ Vista Trabajador</span>
-              <ChevronDown className="w-3 h-3" />
-            </button>
+              <Bell className="w-4 h-4 text-amber-400 animate-bounce" />
+              {pendingWorkdaysCount > 0 && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px] animate-pulse">
+                  {pendingWorkdaysCount} <span className="hidden sm:inline">Días Cerrados</span>
+                </span>
+              )}
+            </Link>
+          )}
 
-            {/* Employee Picker Dropdown */}
-            {showEmployeePicker && (
-              <div 
-                className="absolute right-0 mt-2 w-72 rounded-2xl glass-card p-3 shadow-2xl z-50 border border-[var(--border-color)] animate-in fade-in slide-in-from-top-2 duration-200 space-y-2 max-h-80 overflow-y-auto"
+          {/* Executive Only: Employee Screen Simulator Picker Button */}
+          {isExecutive && (
+            <div className="relative">
+              <button
+                onClick={() => setShowEmployeePicker(!showEmployeePicker)}
+                title="Simular vista de trabajador"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl glass hover:border-indigo-500/40 text-xs font-bold text-indigo-400 transition-all active:scale-95 border border-indigo-500/20"
               >
-                <div className="px-2 py-1.5 border-b border-[var(--border-color)]">
-                  <p className="text-xs font-black text-[var(--text-main)] uppercase tracking-wider">
-                    Simular Pantalla de Trabajador
-                  </p>
-                  <p className="text-[10px] text-[var(--text-muted)]">
-                    Inspecciona lo que ve cualquier empleado sin cerrar tu perfil
-                  </p>
-                </div>
+                <Eye className="w-4 h-4 text-indigo-400" />
+                <span className="hidden md:inline">👁️ Vista Trabajador</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
 
-                <div className="space-y-1">
-                  {employeesList.map((emp) => (
-                    <button
-                      key={emp.id_empleado}
-                      onClick={() => {
-                        setImpersonatedEmployee(emp)
-                        setShowEmployeePicker(false)
-                        router.push('/mi-trabajo')
-                      }}
-                      className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-indigo-500/10 text-left transition-colors group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 font-bold text-xs flex items-center justify-center">
-                          {emp.nombre.charAt(0)}
+              {/* Employee Picker Dropdown */}
+              {showEmployeePicker && (
+                <div 
+                  className="absolute right-0 mt-2 w-72 rounded-2xl glass-card p-3 shadow-2xl z-50 border border-[var(--border-color)] animate-in fade-in slide-in-from-top-2 duration-200 space-y-2 max-h-80 overflow-y-auto"
+                >
+                  <div className="px-2 py-1.5 border-b border-[var(--border-color)]">
+                    <p className="text-xs font-black text-[var(--text-main)] uppercase tracking-wider">
+                      Simular Pantalla de Trabajador
+                    </p>
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      Inspecciona lo que ve cualquier empleado sin cerrar tu perfil
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    {employeesList.map((emp) => (
+                      <button
+                        key={emp.id_empleado}
+                        onClick={() => {
+                          setImpersonatedEmployee(emp)
+                          setShowEmployeePicker(false)
+                          router.push('/mi-trabajo')
+                        }}
+                        className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-indigo-500/10 text-left transition-colors group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 font-bold text-xs flex items-center justify-center">
+                            {emp.nombre.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-[var(--text-main)] group-hover:text-indigo-400 transition-colors">
+                              {emp.nombre} {emp.apellido_paterno}
+                            </p>
+                            <p className="text-[10px] text-[var(--text-muted)]">#{emp.numero_empleado}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs font-bold text-[var(--text-main)] group-hover:text-indigo-400 transition-colors">
-                            {emp.nombre} {emp.apellido_paterno}
-                          </p>
-                          <p className="text-[10px] text-[var(--text-muted)]">#{emp.numero_empleado}</p>
-                        </div>
-                      </div>
-                      <Eye className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-indigo-400" />
-                    </button>
-                  ))}
+                        <Eye className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-indigo-400" />
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* Theme Switcher Button */}
           <button

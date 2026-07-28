@@ -17,8 +17,8 @@ export function RoleGuard({ children }: { children: React.ReactNode }) {
     async function checkAccess() {
         if (!pathname) return
         
-        // Rutas públicas o para todos los trabajadores
-        const publicRoutes = ['/dashboard', '/mi-trabajo', '/menu-principal', '/acerca-de', '/mi-jornada', '/solicitudes']
+        // Rutas públicas para todos los trabajadores
+        const publicRoutes = ['/mi-trabajo', '/menu-principal', '/perfil', '/acerca-de', '/mi-jornada', '/solicitudes']
         if (publicRoutes.some(r => pathname.startsWith(r))) {
             setIsAuthorized(true)
             return
@@ -62,8 +62,8 @@ export function RoleGuard({ children }: { children: React.ReactNode }) {
             return
         }
 
-        // Rutas exclusivas de HR/Admin
-        const hrRoutes = ['/empleados', '/asistencia', '/autorizaciones', '/prenomina', '/evidencias', '/finanzas', '/catalogos', '/configuracion']
+        // Rutas exclusivas de HR/Ejecutivo (incluyendo Dashboard de KPIs)
+        const hrRoutes = ['/dashboard', '/empleados', '/asistencia', '/autorizaciones', '/prenomina', '/evidencias', '/finanzas', '/catalogos', '/configuracion']
         if (hrRoutes.some(r => pathname.startsWith(r))) {
             setIsAuthorized(isHR)
             return
