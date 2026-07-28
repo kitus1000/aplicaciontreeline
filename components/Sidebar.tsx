@@ -111,6 +111,7 @@ export function Sidebar() {
             title: t('menu_group_admin'),
             items: [
                 { name: t('menu_employees'), href: '/empleados', icon: Users, color: 'text-purple-400' },
+                { name: 'Horarios de Trabajo', href: '/horarios', icon: Clock, color: 'text-amber-400' },
                 { name: t('menu_attendance'), href: '/asistencia/dashboard', icon: Clock, color: 'text-amber-400' },
                 { name: t('menu_authorizations'), href: '/autorizaciones/jornadas', icon: Shield, color: 'text-orange-400' },
                 { name: t('menu_payment_rules'), href: '/configuracion/reglas-pago', icon: DollarSign, color: 'text-emerald-400' },

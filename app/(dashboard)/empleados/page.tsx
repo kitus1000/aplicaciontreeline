@@ -9,7 +9,8 @@ import {
     Upload, 
     Download, 
     FileSpreadsheet, 
-    AlertCircle 
+    AlertCircle,
+    Clock 
 } from 'lucide-react'
 import Link from 'next/link'
 import { useI18n } from '@/lib/i18n'
@@ -170,6 +171,10 @@ export default function EmpleadosPage() {
                         <Download className="mr-2 h-4 w-4 text-amber-400" />
                         {t('export')}
                     </button>
+                    <Link href="/horarios" className="flex-1 sm:flex-none inline-flex items-center px-4 py-2.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-slate-950 transition-all">
+                        <Clock className="mr-2 h-4 w-4" />
+                        ⏱️ Horarios de Trabajo
+                    </Link>
                     <Link href="/empleados/nuevo" className="flex-1 sm:flex-none inline-flex items-center px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/20 hover:bg-indigo-500 transition-all">
                         <Plus className="mr-2 h-4 w-4" />
                         {t('new_employee')}
