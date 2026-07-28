@@ -15,7 +15,9 @@ import {
   Sparkles,
   ShieldAlert,
   Check,
-  X
+  X,
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useI18n } from '@/lib/i18n'
@@ -58,7 +60,60 @@ export default function AutorizacionesJornadasPage() {
             .order('date', { ascending: false })
 
         if (!error && data) {
-            setJornadas(data)
+            const empIds = Array.from(new Set(data.map(j => j.employee_id).filter(Boolean)))
+            const dates = Array.from(new Set(data.map(j => j.date).filter(Boolean)))
+
+            const photosMap: Record<string, string[]> = {}
+
+            if (empIds.length > 0 && dates.length > 0) {
+                // 1. Fetch photo evidences from workday_activities
+                const { data: activitiesData } = await supabase
+                    .from('workday_activities')
+                    .select('employee_id, date, storage_url')
+                    .in('employee_id', empIds)
+                    .in('date', dates)
+                    .not('storage_url', 'is', null)
+
+                activitiesData?.forEach(act => {
+                    if (act.storage_url) {
+                        const key = `${act.employee_id}_${act.date}`
+                        if (!photosMap[key]) photosMap[key] = []
+                        if (!photosMap[key].includes(act.storage_url)) {
+                            photosMap[key].push(act.storage_url)
+                        }
+                    }
+                })
+
+                // 2. Fetch photo evidences from workday_events
+                const { data: eventsData } = await supabase
+                    .from('workday_events')
+                    .select('employee_id, date, storage_url')
+                    .in('employee_id', empIds)
+                    .in('date', dates)
+                    .not('storage_url', 'is', null)
+
+                eventsData?.forEach(ev => {
+                    if (ev.storage_url) {
+                        const key = `${ev.employee_id}_${ev.date}`
+                        if (!photosMap[key]) photosMap[key] = []
+                        if (!photosMap[key].includes(ev.storage_url)) {
+                            photosMap[key].push(ev.storage_url)
+                        }
+                    }
+                })
+            }
+
+            // Enriquecer cada jornada con sus fotografías reales
+            const enrichedJornadas = data.map(j => {
+                const key = `${j.employee_id}_${j.date}`
+                const fotosList = photosMap[key] || (j.storage_url ? [j.storage_url] : [])
+                return {
+                    ...j,
+                    fotos: fotosList
+                }
+            })
+
+            setJornadas(enrichedJornadas)
         }
         setLoading(false)
     }
@@ -222,36 +277,55 @@ export default function AutorizacionesJornadasPage() {
                                 </span>
                             </div>
 
-                            {/* Card Content & Evidence */}
+                            {/* Card Content & Real Photo Evidence Gallery */}
                             <div className="space-y-4">
-                                <div className="p-4 rounded-2xl glass border border-[var(--border-color)] flex items-center justify-between">
-                                    <div>
-                                      <p className="text-[10px] uppercase font-bold text-[var(--text-muted)]">{t('evidence_step')}</p>
-                                      {j.storage_url ? (
-                                          <a 
-                                              href={j.storage_url} 
-                                              target="_blank" 
-                                              rel="noreferrer"
-                                              className="flex items-center gap-1.5 text-indigo-400 font-bold text-xs hover:underline mt-1"
-                                          >
-                                              <ExternalLink className="w-3.5 h-3.5" />
-                                              {t('view_on_drive')}
-                                          </a>
-                                      ) : (
-                                          <span className="text-xs text-[var(--text-muted)] italic">Sin fotos adjuntas</span>
-                                      )}
+                                <div className="p-4 rounded-2xl glass border border-[var(--border-color)] space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-[10px] uppercase font-bold text-[var(--text-muted)]">Evidencias Fotográficas</p>
+                                        <span className={cn(
+                                            "text-[10px] font-black px-2 py-0.5 rounded-full border",
+                                            j.fotos && j.fotos.length > 0 
+                                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" 
+                                                : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                        )}>
+                                            {j.fotos && j.fotos.length > 0 ? `📷 ${j.fotos.length} Foto(s)` : '⚠️ Sin Fotos'}
+                                        </span>
                                     </div>
+
+                                    {j.fotos && j.fotos.length > 0 ? (
+                                        <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-hide">
+                                            {j.fotos.map((url: string, idx: number) => (
+                                                <a 
+                                                    key={idx} 
+                                                    href={url} 
+                                                    target="_blank" 
+                                                    rel="noreferrer"
+                                                    className="relative w-16 h-16 rounded-xl overflow-hidden border border-[var(--border-color)] group shrink-0 shadow-sm hover:border-indigo-500 transition-all"
+                                                    title="Ver imagen en tamaño completo"
+                                                >
+                                                    <img src={url} alt={`Evidencia ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                        <ExternalLink className="w-4 h-4 text-white" />
+                                                    </div>
+                                                </a>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-[var(--text-muted)] italic">El trabajador no adjuntó fotos de evidencia para esta jornada</p>
+                                    )}
 
                                     {/* Inspect Screen Button */}
                                     {j.empleados && (
-                                      <button
-                                        onClick={() => handleInspectWorkerScreen(j.empleados)}
-                                        className="px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-600 hover:text-white border border-indigo-500/20 text-indigo-400 text-xs font-bold transition-all flex items-center gap-1.5"
-                                        title="Ver la pantalla exacta de este trabajador"
-                                      >
-                                        <Eye className="w-3.5 h-3.5" />
-                                        <span>👁️ Inspeccionar</span>
-                                      </button>
+                                      <div className="pt-2 border-t border-[var(--border-color)] flex justify-end">
+                                        <button
+                                          onClick={() => handleInspectWorkerScreen(j.empleados)}
+                                          className="px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-600 hover:text-white border border-indigo-500/20 text-indigo-400 text-xs font-bold transition-all flex items-center gap-1.5"
+                                          title="Ver la pantalla exacta de este trabajador"
+                                        >
+                                          <Eye className="w-3.5 h-3.5" />
+                                          <span>👁️ Inspeccionar Pantalla</span>
+                                        </button>
+                                      </div>
                                     )}
                                 </div>
 
