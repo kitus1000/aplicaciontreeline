@@ -53,6 +53,8 @@ export default function KPIDashboardPage() {
     inactivos: 0
   })
 
+  const [totalEventsTodayCount, setTotalEventsTodayCount] = useState<number>(0)
+
   // Detailed Datasets
   const [workerSteppers, setWorkerSteppers] = useState<any[]>([])
   const [photoRanking, setPhotoRanking] = useState<any[]>([])
@@ -103,7 +105,9 @@ export default function KPIDashboardPage() {
         .eq('date', selectedDate)
 
       if (eventsError) console.error('workday_events error:', eventsError)
-      console.log(`workday_events HOY (${selectedDate}):`, eventsToday?.length ?? 0, 'registros')
+      const count = eventsToday?.length ?? 0
+      setTotalEventsTodayCount(count)
+      console.log(`workday_events HOY (${selectedDate}):`, count, 'registros')
 
       // 4. Fetch Today's Permissions / Approvals
       const { data: approvalsToday } = await supabase
@@ -340,6 +344,11 @@ export default function KPIDashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <div className="px-3 py-1.5 glass rounded-2xl border border-indigo-500/30 text-indigo-300 font-bold text-xs flex items-center gap-2">
+            <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+            <span>{totalEventsTodayCount} Registros en BD ({selectedDate})</span>
+          </div>
+
           <div className="flex items-center gap-2 glass px-3 py-2 rounded-2xl border border-[var(--border-color)] shadow-md">
             <Calendar className="w-4 h-4 text-indigo-400" />
             <input
